@@ -1,0 +1,38 @@
+# Grid
+GRID_WIDTH = 6
+GRID_HEIGHT = 4
+
+# Active stage (1, 2 or 3)
+STAGE = 1
+
+# Episode settings
+MAX_STEPS = 200
+N_EPISODES = 5000
+
+# Rewards
+REWARD_STEP = -0.01
+REWARD_BALL = 1.0
+REWARD_GOAL = 10.0
+
+# Q-Learning
+Q_LR = 0.1
+Q_GAMMA = 0.99
+Q_EPSILON_START = 1.0
+Q_EPSILON_MIN = 0.05
+Q_EPSILON_DECAY = 0.995
+
+# DQN (PyTorch)
+DQN_LR = 1e-3
+DQN_GAMMA = 0.99
+DQN_EPSILON_START = 1.0
+DQN_EPSILON_MIN = 0.05
+DQN_EPSILON_DECAY = 0.995
+BATCH_SIZE = 64
+MEMORY_SIZE = 10000
+TARGET_UPDATE_FREQ = 10
+HIDDEN_SIZE = 128
+
+# Output paths
+MODELS_DIR = "results/models"
+LOGS_DIR = "results/logs"
+PLOTS_DIR = "results/plots"
