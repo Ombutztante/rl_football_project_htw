@@ -2,17 +2,24 @@
 GRID_WIDTH = 6
 GRID_HEIGHT = 4
 
-# Active stage (1, 2 or 3)
-STAGE = 1
+# Active level (1, 2 or 3)
+LEVEL = 1
 
 # Episode settings
 MAX_STEPS = 200
 N_EPISODES = 5000
 
-# Rewards
-REWARD_STEP = -0.01
-REWARD_BALL = 1.0
-REWARD_GOAL = 10.0
+# Shooting zone: columns from which a shoot is considered a "good position"
+# (agent_x >= SHOOT_ZONE_X). For a 6-wide grid this means x=4 or x=5.
+SHOOT_ZONE_X = GRID_WIDTH - 2  # = 4
+
+# Rewards — Level 1
+REWARD_STEP = -1           # every step
+REWARD_BALL_PICKUP = 5     # picking up the ball
+REWARD_GOAL = 30           # scoring a goal (via shoot)
+REWARD_CLOSER = 1          # agent moved closer to goal (shaping)
+REWARD_SHOOT_NO_BALL = -5  # shoot without ball
+REWARD_SHOOT_BAD_POS = -5  # shoot from outside shooting zone
 
 # Q-Learning
 Q_LR = 0.1

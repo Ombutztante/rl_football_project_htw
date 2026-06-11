@@ -34,28 +34,68 @@ python -m pytest tests/test_environment.py
 jupyter notebook notebooks/experiments.ipynb
 ```
 
-## Game Design: Three Stages of Complexity
+## Game Design: Three Levels of Complexity
 
-The environment is a 2D grid (default 8×6). Complexity grows across three stages, each adding to the previous.
+The environment is a 2D grid (default 6×4, configured in `config.py`). Complexity grows across three levels, each adding to the previous. **All levels share the same 5 actions** so agent code stays clean across levels. Levels are trained independently (no progressive transfer).
 
-**Stage 1 — Basic navigation**
-- Agent navigates to the ball (intermediate reward), then to the goal (win).
-- State: `(agent_x, agent_y, ball_x, ball_y)`
-- Actions: up, down, left, right (4 total)
-- Ball stays fixed; goal is fixed at the right edge (center row).
+**Actions (all levels):** 0=up, 1=down, 2=left, 3=right, 4=shoot
 
-**Stage 2 — Ball possession and shooting**
-- Agent must pick up ball, carry it toward goal, and shoot.
-- Adds `has_ball` to state: `(agent_x, agent_y, ball_x, ball_y, has_ball)`
-- Adds `shoot` action (5 total). Shoot sends ball right; goal if agent is aligned with goal row.
-- Reward design becomes central: ball pickup, direction-toward-goal, scoring, missed shots.
+---
 
-**Stage 3 — Opponent**
-- A rule-based opponent (moves toward the ball) is added.
-- Adds opponent position to state: `(agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y)`
-- Penalties for opponent contact and ball loss.
+**Level 1 — Shoot only from a good position**
 
-The active stage is set via `config.py` (`STAGE = 1 | 2 | 3`).
+The agent must learn: *get ball → reach shooting zone → shoot*. The RL challenge is that `shoot` is only useful in certain states — the agent must learn situational action selection, not just navigation.
+
+- State: `(agent_x, agent_y, ball_x, ball_y, has_ball)` — 5 elements
+- Shooting zone: columns near the goal (e.g. `agent_x >= width - 2`)
+- Rewards:
+  - `+30` goal scored
+  - `+5` ball picked up
+  - `+1` agent/ball moved closer to goal
+  - `-1` per step
+  - `-5` shoot without ball
+  - `-5` shoot from bad position (outside shooting zone)
+
+---
+
+**Level 2 — Dribbling vs. forward pass**
+
+A real decision emerges: safe dribbling (slow) vs. fast but risky forward pass.
+
+- State: `(agent_x, agent_y, ball_x, ball_y, has_ball)` — 5 elements
+- **Dribbling:** agent moves 1 field but with ball incurs a time penalty (movement costs 2 steps effectively, e.g. every 2nd move is skipped or costs `-2`)
+- **Shoot (forward pass):** ball travels 2–3 fields toward goal, agent loses possession and must chase
+- Ball out of bounds: `-5` penalty, ball lost
+- Rewards:
+  - `+40` goal scored
+  - `+5` ball picked up
+  - `+2` ball moved closer to goal via forward pass
+  - `+1` ball moved closer to goal via dribbling
+  - `-1` per step
+  - `-5` ball shot out of bounds
+  - `-3` unnecessary/bad shot
+
+---
+
+**Level 3 — Opponent moves toward ball**
+
+A dynamic opponent is added that moves 1 field toward the ball every 2nd turn. If the opponent reaches the ball, a penalty is applied.
+
+- State: `(agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y)` — 7 elements
+- Opponent: rule-based, moves every 2nd step toward ball
+- Reaching ball = penalty; episode may end on ball loss
+- Rewards:
+  - `+50` goal scored
+  - `+5` ball picked up
+  - `+2` ball moved closer to goal
+  - `-1` per step
+  - `-10` opponent reaches ball
+  - `-20` ball lost to opponent
+  - `-5` bad shot
+
+---
+
+The active level is set via `config.py` (`LEVEL = 1 | 2 | 3`).
 
 ## Architecture
 
@@ -97,4 +137,4 @@ agent.learn(state, action, reward, next_state)
 
 **Algorithm decision (still open):** Q-Table is the baseline (close to lecture content, reliable for small grids). DQN via PyTorch is the extension (justifies PyTorch dependency, shows where Q-tables hit limits). Final weighting between the two is to be determined.
 
-**Stage determines n_actions:** Stage 1 → 4 actions (no shoot). Stage 2+ → 5 actions (adds shoot).
+**n_actions is always 5** across all levels (up, down, left, right, shoot). The meaning of `shoot` expands per level: Level 1 = score if in shooting zone; Level 2 = forward pass (ball travels ahead, agent chases); Level 3 = same as Level 2 with opponent pressure.
