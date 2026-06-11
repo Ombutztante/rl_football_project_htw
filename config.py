@@ -13,13 +13,22 @@ N_EPISODES = 5000
 # (agent_x >= SHOOT_ZONE_X). For a 6-wide grid this means x=4 or x=5.
 SHOOT_ZONE_X = GRID_WIDTH - 2  # = 4
 
-# Rewards — Level 1
+# Rewards — shared across all levels
 REWARD_STEP = -1           # every step
 REWARD_BALL_PICKUP = 5     # picking up the ball
-REWARD_GOAL = 30           # scoring a goal (via shoot)
-REWARD_CLOSER = 1          # agent moved closer to goal (shaping)
+REWARD_CLOSER = 1          # moved closer to goal (shaping, movement actions)
+
+# Rewards — Level 1
+REWARD_GOAL = 30           # goal scored via shoot from zone
 REWARD_SHOOT_NO_BALL = -5  # shoot without ball
 REWARD_SHOOT_BAD_POS = -5  # shoot from outside shooting zone
+
+# Rewards — Level 2
+SHOOT_RANGE = 3            # cells the ball travels on a forward pass
+REWARD_GOAL_L2 = 40        # goal scored (dribble to goal or pass landing on goal)
+REWARD_PASS_CLOSER = 2     # ball advanced toward goal via forward pass
+REWARD_BALL_OUT = -5       # ball exits right wall without scoring
+REWARD_SHOOT_WASTED = -3   # shoot without ball
 
 # Q-Learning
 Q_LR = 0.1
