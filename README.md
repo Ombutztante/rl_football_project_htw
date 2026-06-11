@@ -128,15 +128,15 @@ A . . B . G
 ### Level 3 — Gegner bewegt sich zum Ball
 
 ```
+. . . . X .   ← Gegner startet oben rechts
 . . . . . .
-. . . . . .
-A . . B X G
+A . . B . G
 . . . . . .
 
 X = Gegner (regelbasiert)
 ```
 
-Gleiche Mechanik wie Level 2, aber ein **regelbasierter Gegner** kommt hinzu. Der Gegner startet nahe dem Tor (`goal_x − OPP_START_X_FROM_GOAL`, Standard: x=4) und bewegt sich alle `OPP_MOVE_EVERY` Schritte (Standard: 2) einen Schritt in Richtung Ball. Erreicht er den Ball, endet die Episode mit einer Strafe.
+Gleiche Mechanik wie Level 2, aber ein **regelbasierter Gegner** kommt hinzu. Der Gegner startet oben rechts bei `(goal_x − OPP_START_X_FROM_GOAL, 0)` (Standard: x=4, y=0) und bewegt sich alle `OPP_MOVE_EVERY` Schritte (Standard: 2) einen Schritt in Richtung Ball. Erreicht er den Ball, endet die Episode mit einer Strafe.
 
 Der Agent muss lernen: *Schieße ich sofort weiter, bevor der Gegner kommt? Oder dribble ich sicher?*
 

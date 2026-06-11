@@ -82,7 +82,7 @@ A real decision emerges: safe dribbling (slow) vs. fast but risky forward pass.
 A dynamic opponent is added that moves 1 field toward the ball every 2nd turn. If the opponent reaches the ball, a penalty is applied.
 
 - State: `(agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y)` — 7 elements
-- Opponent: rule-based, moves every 2nd step toward ball
+- Opponent: rule-based, starts at `(goal_x − OPP_START_X_FROM_GOAL, 0)` (top row), moves every 2nd step toward ball
 - Reaching ball = penalty; episode may end on ball loss
 - Rewards:
   - `+50` goal scored
@@ -135,6 +135,6 @@ agent.learn(state, action, reward, next_state)
 
 **DQN input (per spec):** player x/y, ball x/y, has_ball, goal x/y, opponent x/y (stage 3). All coordinates normalized to [0, 1].
 
-**Algorithm decision (still open):** Q-Table is the baseline (close to lecture content, reliable for small grids). DQN via PyTorch is the extension (justifies PyTorch dependency, shows where Q-tables hit limits). Final weighting between the two is to be determined.
+**Algorithm decision:** Q-Table is the baseline (close to lecture content, reliable and stable on small grids). DQN is the extension — it converges comparably on Level 1+2, but shows characteristic instability on Level 3 (Q-value drift after ε reaches minimum), demonstrating where tabular methods are actually more robust.
 
 **n_actions is always 5** across all levels (up, down, left, right, shoot). The meaning of `shoot` expands per level: Level 1 = score if in shooting zone; Level 2 = forward pass (ball travels ahead, agent chases); Level 3 = same as Level 2 with opponent pressure.
