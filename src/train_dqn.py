@@ -73,9 +73,10 @@ def train():
                 f"  eps={agent.epsilon:.3f}"
             )
 
-    # Save model and log
-    model_path = os.path.join(config.MODELS_DIR, f"dqn_level{config.LEVEL}.pt")
-    log_path = os.path.join(config.LOGS_DIR, f"dqn_level{config.LEVEL}.json")
+    # Save model and log — filename encodes level + episode count for easy comparison
+    stem = f"dqn_level{config.LEVEL}_ep{config.N_EPISODES}"
+    model_path = os.path.join(config.MODELS_DIR, f"{stem}.pt")
+    log_path = os.path.join(config.LOGS_DIR, f"{stem}.json")
 
     agent.save(model_path)
     with open(log_path, "w") as f:

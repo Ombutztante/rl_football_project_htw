@@ -133,24 +133,47 @@ def plot_comparison(q_log_path, dqn_log_path, level=None, save_path=None, window
     plt.close()
 
 
+def _ep_count(log_path):
+    """Read the episode count from the last entry of a log file."""
+    log = _load_log(log_path)
+    return log[-1]["episode"]
+
+
+def _plot_stem(log_path):
+    """Derive a plot filename stem from the log filename (replaces .json with .png)."""
+    return os.path.splitext(os.path.basename(log_path))[0]
+
+
 if __name__ == "__main__":
     level = config.LEVEL
+    ep    = config.N_EPISODES
 
-    q_log   = os.path.join(config.LOGS_DIR,  f"q_table_level{level}.json")
-    dqn_log = os.path.join(config.LOGS_DIR,  f"dqn_level{level}.json")
-    q_plot  = os.path.join(config.PLOTS_DIR, f"q_table_level{level}.png")
-    dqn_plot= os.path.join(config.PLOTS_DIR, f"dqn_level{level}.png")
-    cmp_plot= os.path.join(config.PLOTS_DIR, f"comparison_level{level}.png")
+    q_log   = os.path.join(config.LOGS_DIR,  f"q_table_level{level}_ep{ep}.json")
+    dqn_log = os.path.join(config.LOGS_DIR,  f"dqn_level{level}_ep{ep}.json")
 
     if os.path.exists(q_log):
-        plot_training(q_log, title=f"Q-Table – Level {level}", save_path=q_plot)
+        stem = _plot_stem(q_log)
+        plot_training(
+            q_log,
+            title=f"Q-Table – Level {level} – {_ep_count(q_log)} Episoden",
+            save_path=os.path.join(config.PLOTS_DIR, f"{stem}.png"),
+        )
     else:
         print(f"Kein Q-Table-Log gefunden: {q_log}")
 
     if os.path.exists(dqn_log):
-        plot_training(dqn_log, title=f"DQN – Level {level}", save_path=dqn_plot)
+        stem = _plot_stem(dqn_log)
+        plot_training(
+            dqn_log,
+            title=f"DQN – Level {level} – {_ep_count(dqn_log)} Episoden",
+            save_path=os.path.join(config.PLOTS_DIR, f"{stem}.png"),
+        )
     else:
         print(f"Kein DQN-Log gefunden: {dqn_log}")
 
     if os.path.exists(q_log) and os.path.exists(dqn_log):
-        plot_comparison(q_log, dqn_log, level=level, save_path=cmp_plot)
+        plot_comparison(
+            q_log, dqn_log,
+            level=level,
+            save_path=os.path.join(config.PLOTS_DIR, f"comparison_level{level}_ep{ep}.png"),
+        )

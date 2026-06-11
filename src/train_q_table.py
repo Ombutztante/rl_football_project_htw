@@ -59,9 +59,10 @@ def train():
                 f"  states={len(agent.q_table)}"
             )
 
-    # Save model and log
-    model_path = os.path.join(config.MODELS_DIR, f"q_table_level{config.LEVEL}.pkl")
-    log_path = os.path.join(config.LOGS_DIR, f"q_table_level{config.LEVEL}.json")
+    # Save model and log — filename encodes level + episode count for easy comparison
+    stem = f"q_table_level{config.LEVEL}_ep{config.N_EPISODES}"
+    model_path = os.path.join(config.MODELS_DIR, f"{stem}.pkl")
+    log_path = os.path.join(config.LOGS_DIR, f"{stem}.json")
 
     agent.save(model_path)
     with open(log_path, "w") as f:
