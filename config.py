@@ -7,7 +7,7 @@ LEVEL = 1
 
 # Episode settings
 MAX_STEPS = 200
-N_EPISODES = 5000
+N_EPISODES = 2000
 
 # Shooting zone: columns from which a shoot is considered a "good position"
 # (agent_x >= SHOOT_ZONE_X). For a 6-wide grid this means x=4 or x=5.
@@ -52,14 +52,16 @@ Q_EPSILON_MIN = 0.05
 Q_EPSILON_DECAY = 0.995
 
 # DQN (PyTorch)
-DQN_LR = 1e-3
+DQN_LR = 1e-4              # 1e-3 caused Q-value explosion; 1e-4 is more stable
 DQN_GAMMA = 0.99
 DQN_EPSILON_START = 1.0
 DQN_EPSILON_MIN = 0.05
 DQN_EPSILON_DECAY = 0.995
 BATCH_SIZE = 64
 MEMORY_SIZE = 10000
-TARGET_UPDATE_FREQ = 10
+TARGET_UPDATE_FREQ = 100   # episodes between target network syncs (controlled in training script)
+REPLAY_WARMUP = 500        # minimum buffer size before learning starts
+GRAD_CLIP_NORM = 1.0       # max gradient norm for clipping
 HIDDEN_SIZE = 128
 
 # Output paths

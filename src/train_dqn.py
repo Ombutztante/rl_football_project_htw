@@ -20,6 +20,7 @@ def train():
 
     log = []
     print(f"DQN training  |  Level {config.LEVEL}  |  {config.N_EPISODES} episodes  |  device={agent.device}")
+    print(f"  lr={config.DQN_LR}  warmup={config.REPLAY_WARMUP}  target_sync_every={config.TARGET_UPDATE_FREQ}ep  grad_clip={config.GRAD_CLIP_NORM}")
     print("-" * 60)
 
     for episode in range(1, config.N_EPISODES + 1):
@@ -48,6 +49,9 @@ def train():
                 break
 
         agent.decay_epsilon()
+
+        if episode % config.TARGET_UPDATE_FREQ == 0:
+            agent.update_target_network()
 
         avg_loss = sum(episode_losses) / len(episode_losses) if episode_losses else None
         log.append({

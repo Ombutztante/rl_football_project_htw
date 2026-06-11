@@ -36,8 +36,13 @@ class DQNAgent:
     """
     Deep Q-Network agent (Mnih et al., 2015).
 
-    Uses experience replay and a target network that is copied from the
-    online network every TARGET_UPDATE_FREQ learn() calls.
+    Stabilisation measures applied:
+      - Huber loss (SmoothL1) instead of MSE — less sensitive to large Q-value errors
+      - Gradient clipping (GRAD_CLIP_NORM) — prevents gradient explosion
+      - Replay warm-up (REPLAY_WARMUP) — learning only starts once the buffer
+        holds enough diverse transitions
+      - Target network synced externally by the training script every
+        TARGET_UPDATE_FREQ episodes (call update_target_network())
 
     The agent works on normalised float state arrays (env.state_to_array()).
     The training script is responsible for the conversion:
@@ -48,7 +53,7 @@ class DQNAgent:
         agent.store(state_arr, action, reward, next_state_arr, done)
         agent.learn()
 
-    Call decay_epsilon() once per episode.
+    Call decay_epsilon() and (every N episodes) update_target_network() per episode.
     """
 
     def __init__(
@@ -63,7 +68,8 @@ class DQNAgent:
         batch_size=None,
         memory_size=None,
         hidden_size=None,
-        target_update_freq=None,
+        replay_warmup=None,
+        grad_clip_norm=None,
     ):
         self.state_size = state_size
         self.n_actions = n_actions
@@ -73,7 +79,10 @@ class DQNAgent:
         self.epsilon_min = epsilon_min if epsilon_min is not None else config.DQN_EPSILON_MIN
         self.epsilon_decay = epsilon_decay if epsilon_decay is not None else config.DQN_EPSILON_DECAY
         self.batch_size = batch_size if batch_size is not None else config.BATCH_SIZE
-        self.target_update_freq = target_update_freq if target_update_freq is not None else config.TARGET_UPDATE_FREQ
+        self.grad_clip_norm = grad_clip_norm if grad_clip_norm is not None else config.GRAD_CLIP_NORM
+        # Warm-up must be at least batch_size so the first sample call always succeeds
+        warmup = replay_warmup if replay_warmup is not None else config.REPLAY_WARMUP
+        self.replay_warmup = max(warmup, self.batch_size)
         hidden_size = hidden_size if hidden_size is not None else config.HIDDEN_SIZE
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -85,7 +94,6 @@ class DQNAgent:
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.lr)
         self.memory = ReplayBuffer(memory_size if memory_size is not None else config.MEMORY_SIZE)
-        self._learn_steps = 0
 
     # ------------------------------------------------------------------
     # Core interface
@@ -107,10 +115,9 @@ class DQNAgent:
     def learn(self):
         """
         Sample a batch and perform one gradient update.
-        Returns the loss value, or None if the buffer is not full enough yet.
-        Target network is synced every target_update_freq calls to learn().
+        Returns the loss value, or None if the buffer has not reached replay_warmup yet.
         """
-        if len(self.memory) < self.batch_size:
+        if len(self.memory) < self.replay_warmup:
             return None
 
         states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
@@ -129,17 +136,21 @@ class DQNAgent:
             max_next_q = self.target_net(next_states_t).max(dim=1).values
             target_q = rewards_t + self.gamma * max_next_q * (1.0 - dones_t)
 
-        loss = nn.MSELoss()(current_q, target_q)
+        # Huber loss — less sensitive to large Q-value errors than MSE
+        loss = nn.SmoothL1Loss()(current_q, target_q)
 
         self.optimizer.zero_grad()
         loss.backward()
+        # Gradient clipping — prevents the explosion seen with MSE + high LR
+        nn.utils.clip_grad_norm_(self.q_net.parameters(), self.grad_clip_norm)
         self.optimizer.step()
 
-        self._learn_steps += 1
-        if self._learn_steps % self.target_update_freq == 0:
-            self._sync_target()
-
         return loss.item()
+
+    def update_target_network(self):
+        """Copy online network weights into the target network.
+        Call this from the training script every TARGET_UPDATE_FREQ episodes."""
+        self.target_net.load_state_dict(self.q_net.state_dict())
 
     def decay_epsilon(self):
         """Multiply epsilon by decay factor, floored at epsilon_min."""
@@ -166,9 +177,3 @@ class DQNAgent:
         self.epsilon = checkpoint["epsilon"]
         self.target_net.eval()
 
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
-
-    def _sync_target(self):
-        self.target_net.load_state_dict(self.q_net.state_dict())
