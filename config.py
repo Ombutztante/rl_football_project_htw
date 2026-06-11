@@ -3,11 +3,11 @@ GRID_WIDTH = 6
 GRID_HEIGHT = 4
 
 # Active level (1, 2 or 3)
-LEVEL = 2
+LEVEL = 3
 
 # Episode settings
 MAX_STEPS = 200
-N_EPISODES = 300
+N_EPISODES = 1500
 
 # Shooting zone: columns from which a shoot is considered a "good position"
 # (agent_x >= SHOOT_ZONE_X). For a 6-wide grid this means x=4 or x=5.

@@ -305,7 +305,7 @@ def test_l3_opponent_initial_position():
     state = env.reset()
     expected_opp_x = env.goal_pos[0] - cfg.OPP_START_X_FROM_GOAL
     assert state[5] == expected_opp_x
-    assert state[6] == env.height // 2
+    assert state[6] == 0
 
 
 def test_l3_opponent_does_not_move_on_first_step():

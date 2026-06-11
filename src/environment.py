@@ -75,7 +75,7 @@ class FootballEnv:
 
         if self.level >= 3:
             opp_x = self.goal_pos[0] - config.OPP_START_X_FROM_GOAL
-            self.opp_pos = [int(np.clip(opp_x, 0, self.width - 1)), self.height // 2]
+            self.opp_pos = [int(np.clip(opp_x, 0, self.width - 1)), 0]
 
         return self._get_state()
 
