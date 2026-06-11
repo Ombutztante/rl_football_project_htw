@@ -30,6 +30,20 @@ REWARD_PASS_CLOSER = 2     # ball advanced toward goal via forward pass
 REWARD_BALL_OUT = -5       # ball exits right wall without scoring
 REWARD_SHOOT_WASTED = -3   # shoot without ball
 
+# Rewards — Level 3
+REWARD_GOAL_L3 = 50        # goal scored in Level 3
+REWARD_BAD_SHOT_L3 = -5    # shoot without ball in Level 3
+REWARD_OPP_REACHES_BALL = -10  # opponent reaches loose ball → episode ends
+REWARD_BALL_LOST = -20     # opponent tackles agent who has ball → episode ends
+
+# Level 3 opponent
+# Opponent starts at x = (GRID_WIDTH - 1) - OPP_START_X_FROM_GOAL, y = GRID_HEIGHT // 2
+# With defaults (6×4 grid): x = 5 - 1 = 4, y = 2
+# Tune OPP_START_X_FROM_GOAL and OPP_MOVE_EVERY to adjust difficulty.
+# On small grids (6×4) the agent learns to shoot immediately; larger grids allow richer tactics.
+OPP_START_X_FROM_GOAL = 1  # columns left of goal where opponent starts
+OPP_MOVE_EVERY = 2         # opponent moves 1 cell every N agent steps (1 = every step)
+
 # Q-Learning
 Q_LR = 0.1
 Q_GAMMA = 0.99

@@ -287,3 +287,128 @@ def test_l2_shoot_without_ball_gives_penalty():
     _, reward, done = env.step(4)
     assert reward == -4      # -1 (step) + -3 (wasted)
     assert not done
+
+
+# ===========================================================================
+# Level 3 — Opponent moves toward ball
+# ===========================================================================
+
+def test_l3_state_has_7_elements():
+    env = FootballEnv(level=3)
+    state = env.reset()
+    assert len(state) == 7  # (ax, ay, bx, by, has_ball, opp_x, opp_y)
+
+
+def test_l3_opponent_initial_position():
+    import config as cfg
+    env = FootballEnv(level=3)
+    state = env.reset()
+    expected_opp_x = env.goal_pos[0] - cfg.OPP_START_X_FROM_GOAL
+    assert state[5] == expected_opp_x
+    assert state[6] == env.height // 2
+
+
+def test_l3_opponent_does_not_move_on_first_step():
+    # With OPP_MOVE_EVERY >= 2 (default), opponent stays put on step 1 (1 % 2 != 0)
+    import config as cfg
+    env = FootballEnv(level=3)
+    env.reset()
+    env.agent_pos = [0, 0]
+    env.ball_pos = [0, 0]
+    env.has_ball = False
+    init_opp = env.opp_pos.copy()
+    env.step(0)  # step 1 — no opponent move expected
+    assert env.opp_pos == init_opp
+
+
+def test_l3_opponent_moves_after_n_steps():
+    # After OPP_MOVE_EVERY steps the opponent must have moved at least once.
+    import config as cfg
+    env = FootballEnv(level=3)
+    env.reset()
+    # Keep ball far from opponent so the episode does not end prematurely
+    env.ball_pos = [0, 0]
+    env.agent_pos = [0, 0]
+    env.has_ball = False
+    init_opp = env.opp_pos.copy()
+    for _ in range(cfg.OPP_MOVE_EVERY):
+        if not env.done:
+            env.step(0)
+    assert env.opp_pos != init_opp
+
+
+def test_l3_opponent_reaches_loose_ball_ends_episode():
+    import config as cfg
+    env = FootballEnv(level=3)
+    env.reset()
+    # Place opponent one step to the right of ball; agent well away
+    env.ball_pos = [3, 0]
+    env.agent_pos = [0, 0]
+    env.has_ball = False
+    env.opp_pos = [4, 0]
+    # Force step_count so the next step triggers an opponent move
+    env.step_count = cfg.OPP_MOVE_EVERY - 1
+    _, reward, done = env.step(0)  # agent moves (clamped at top), then opp moves to ball
+    assert done
+    assert reward == -1 + cfg.REWARD_OPP_REACHES_BALL  # -11
+
+
+def test_l3_opponent_tackles_agent_with_ball_ends_episode():
+    import config as cfg
+    env = FootballEnv(level=3)
+    env.reset()
+    # Agent with ball at (3, 0); opponent one step right — agent tries to go up (clamped)
+    env.agent_pos = [3, 0]
+    env.has_ball = True
+    env.ball_pos = [3, 0]
+    env.opp_pos = [4, 0]  # opponent to the right
+    env.step_count = cfg.OPP_MOVE_EVERY - 1  # next step triggers opp move
+    _, reward, done = env.step(0)  # up: clamped at y=0, agent stays, opp moves left to (3,0)
+    assert done
+    assert reward == -1 + cfg.REWARD_BALL_LOST  # -21
+    assert not env.has_ball
+
+
+def test_l3_shoot_without_ball_penalty():
+    import config as cfg
+    env = FootballEnv(level=3)
+    env.reset()
+    env.has_ball = False
+    env.agent_pos = [0, 0]
+    env.ball_pos = [3, 2]
+    env.opp_pos = [0, 3]   # far from ball; step 1, no opponent move
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert not done
+    assert reward == -1 + cfg.REWARD_BAD_SHOT_L3  # -6
+
+
+def test_l3_forward_pass_goal_scores_50():
+    import config as cfg
+    env = FootballEnv(level=3)
+    env.reset()
+    _, gy = env.goal_pos
+    env.agent_pos = [3, gy]
+    env.has_ball = True
+    env.ball_pos = [3, gy]
+    env.opp_pos = [0, 0]   # far away; step 1, no opponent move
+    env.step_count = 0
+    _, reward, done = env.step(4)  # pass exits at goal row → goal
+    assert done
+    assert reward == -1 + cfg.REWARD_GOAL_L3  # 49
+
+
+def test_l3_dribble_to_goal_scores_50():
+    import config as cfg
+    env = FootballEnv(level=3)
+    env.reset()
+    gx, gy = env.goal_pos
+    env.agent_pos = [gx - 1, gy]
+    env.has_ball = True
+    env.ball_pos = [gx - 1, gy]
+    env.opp_pos = [0, 0]   # far away; step 1, no opponent move
+    env.step_count = 0
+    _, reward, done = env.step(3)  # right → into goal
+    assert done
+    # -1 (step) + 1 (closer, dist 1→0) + 50 (goal L3) = 50
+    assert reward == 50

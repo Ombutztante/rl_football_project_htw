@@ -8,7 +8,7 @@ import config
 
 class FootballEnv:
     """
-    2D Gridworld football environment — supports Level 1 and Level 2.
+    2D Gridworld football environment — supports Level 1, 2, and 3.
     The active level is read from config.LEVEL (or passed as argument).
 
     Grid layout (6x4 default, width x height):
@@ -18,7 +18,7 @@ class FootballEnv:
         A . . B . G
         . . . . . .
 
-    A = Agent without ball, P = Agent with ball, B = Ball, G = Goal
+    A = Agent without ball, P = Agent with ball, B = Ball, G = Goal, X = Opponent
 
     Level 1 — shoot only from good position
         Agent picks up ball, reaches shooting zone, shoots.
@@ -29,8 +29,14 @@ class FootballEnv:
         Agent loses possession and must chase.
         Scoring: ball lands on goal cell OR agent dribbles ball to goal cell.
 
-    State:   tuple (agent_x, agent_y, ball_x, ball_y, has_ball) — hashable,
-             used directly as Q-table key. Same structure for both levels.
+    Level 3 — opponent moves toward ball
+        Same mechanics as Level 2 plus a rule-based opponent.
+        Opponent starts near the goal and moves one cell toward the ball
+        every OPP_MOVE_EVERY agent steps.
+        Episode ends with a penalty when opponent reaches the ball.
+
+    State (Level 1+2):  tuple (agent_x, agent_y, ball_x, ball_y, has_ball)               — 5 elements
+    State (Level 3):    tuple (agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y) — 7 elements
     Actions: 0=up  1=down  2=left  3=right  4=shoot  (always 5)
     Returns: reset() -> state
              step(action) -> (next_state, reward, done)
@@ -66,6 +72,11 @@ class FootballEnv:
         self.has_ball = False
         self.done = False
         self.step_count = 0
+
+        if self.level >= 3:
+            opp_x = self.goal_pos[0] - config.OPP_START_X_FROM_GOAL
+            self.opp_pos = [int(np.clip(opp_x, 0, self.width - 1)), self.height // 2]
+
         return self._get_state()
 
     def step(self, action):
@@ -88,6 +99,17 @@ class FootballEnv:
             +2   ball advanced toward goal via forward pass
             -5   ball exits right wall without scoring
             -3   shoot without ball
+
+        Level 3 reward structure (same mechanics as Level 2 + opponent):
+            -1   every step
+            +5   ball picked up
+            +1   moved closer to goal (shaping, movement only)
+            +50  goal scored (dribble to goal OR pass landing on goal)
+            +2   ball advanced toward goal via forward pass
+            -5   ball exits right wall without scoring
+            -5   shoot without ball
+            -10  opponent reaches loose ball (episode ends)
+            -20  opponent tackles agent carrying ball (episode ends)
         """
         if self.done:
             raise RuntimeError("Episode is done. Call reset() first.")
@@ -117,10 +139,15 @@ class FootballEnv:
             if self._dist_to_goal() < prev_dist:
                 reward += config.REWARD_CLOSER  # +1
 
-            # Level 2: agent dribbles ball into goal cell → score
+            # Level 2+: agent dribbles ball into goal cell → score
             if self.level >= 2 and self.has_ball and self.agent_pos == list(self.goal_pos):
-                reward += config.REWARD_GOAL_L2  # +40
+                goal_reward = config.REWARD_GOAL_L3 if self.level >= 3 else config.REWARD_GOAL_L2
+                reward += goal_reward
                 self.done = True
+
+        # Level 3: opponent moves and may end the episode
+        if self.level >= 3 and not self.done:
+            reward += self._move_and_check_opponent()
 
         if self.step_count >= self.max_steps:
             self.done = True
@@ -132,7 +159,6 @@ class FootballEnv:
         grid = [["." for _ in range(self.width)] for _ in range(self.height)]
 
         if self.level == 1:
-            # Mark shooting zone with a visual hint
             for y in range(self.height):
                 for x in range(self.shoot_zone_x, self.width - 1):
                     grid[y][x] = ","
@@ -145,6 +171,11 @@ class FootballEnv:
             if 0 <= bx < self.width and 0 <= by < self.height:
                 grid[by][bx] = "B"
 
+        if self.level >= 3:
+            ox, oy = self.opp_pos
+            if 0 <= ox < self.width and 0 <= oy < self.height:
+                grid[oy][ox] = "X"
+
         ax, ay = self.agent_pos
         grid[ay][ax] = "P" if self.has_ball else "A"
 
@@ -152,21 +183,21 @@ class FootballEnv:
         print(f"\nLevel {self.level} | Step {self.step_count} | Ball: {has_str}")
         for row in grid:
             print(" ".join(row))
-        print(f"Agent={tuple(self.agent_pos)}  Ball={tuple(self.ball_pos)}  Goal={self.goal_pos}")
+        info = f"Agent={tuple(self.agent_pos)}  Ball={tuple(self.ball_pos)}  Goal={self.goal_pos}"
+        if self.level >= 3:
+            info += f"  Opp={tuple(self.opp_pos)}"
+        print(info)
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
     def _handle_shoot(self):
-        """
-        Resolve a shoot action. Returns the reward delta (step penalty excluded).
-        Dispatches to the level-specific implementation.
-        """
+        """Resolve a shoot action. Returns the reward delta (step penalty excluded)."""
         if self.level == 1:
             return self._shoot_l1()
         else:
-            return self._shoot_l2()
+            return self._shoot_forward_pass()
 
     def _shoot_l1(self):
         """
@@ -198,18 +229,17 @@ class FootballEnv:
             self.has_ball = False
             return 0
 
-    def _shoot_l2(self):
+    def _shoot_forward_pass(self):
         """
-        Level 2 shoot: forward pass — ball travels SHOOT_RANGE cells to the right.
-            No ball                              → -3
-            Ball exits right wall, goal row      → +40, episode ends
-            Ball exits right wall, wrong row     → -5, ball at right wall
-            Ball stays in field, lands on goal   → +40, episode ends
-            Ball stays in field, moves closer    → +2
-            Ball stays in field, no progress     → 0
+        Level 2+3 shoot: ball travels SHOOT_RANGE cells to the right.
+        Level 2: no-ball = -3, goal = +40
+        Level 3: no-ball = -5, goal = +50
         """
         if not self.has_ball:
-            return config.REWARD_SHOOT_WASTED  # -3
+            # Different wasted-shot penalty per level
+            return config.REWARD_SHOOT_WASTED if self.level == 2 else config.REWARD_BAD_SHOT_L3
+
+        goal_reward = config.REWARD_GOAL_L2 if self.level == 2 else config.REWARD_GOAL_L3
 
         bx, by = self.ball_pos
         gx, gy = self.goal_pos
@@ -222,7 +252,7 @@ class FootballEnv:
             self.ball_pos = [self.width - 1, by]
             if by == gy:
                 self.done = True
-                return config.REWARD_GOAL_L2  # +40
+                return goal_reward
             else:
                 return config.REWARD_BALL_OUT  # -5
 
@@ -230,13 +260,43 @@ class FootballEnv:
         self.ball_pos = [raw_new_bx, by]
         if self.ball_pos == list(self.goal_pos):
             self.done = True
-            return config.REWARD_GOAL_L2  # +40
+            return goal_reward
 
         old_dist = abs(bx - gx) + abs(by - gy)
         new_dist = abs(raw_new_bx - gx) + abs(by - gy)
         if new_dist < old_dist:
             return config.REWARD_PASS_CLOSER  # +2
         return 0
+
+    def _move_and_check_opponent(self):
+        """
+        Move opponent toward ball (every OPP_MOVE_EVERY steps), then check
+        if opponent has reached the ball. Returns reward delta.
+        """
+        if self.step_count % config.OPP_MOVE_EVERY == 0:
+            self._move_opponent()
+
+        if self.opp_pos == self.ball_pos:
+            self.done = True
+            if self.has_ball:
+                self.has_ball = False
+                return config.REWARD_BALL_LOST       # -20 — opponent tackles agent
+            return config.REWARD_OPP_REACHES_BALL    # -10 — opponent reaches loose ball
+        return 0
+
+    def _move_opponent(self):
+        """Move opponent one cell toward the ball (Manhattan greedy, prefer x-axis)."""
+        ox, oy = self.opp_pos
+        bx, by = self.ball_pos
+        dx = bx - ox
+        dy = by - oy
+        if dx == 0 and dy == 0:
+            return
+        if abs(dx) >= abs(dy):
+            ox += int(np.sign(dx))
+        else:
+            oy += int(np.sign(dy))
+        self.opp_pos = [int(np.clip(ox, 0, self.width - 1)), int(np.clip(oy, 0, self.height - 1))]
 
     def _dist_to_goal(self):
         """Manhattan distance from agent to goal."""
@@ -246,10 +306,13 @@ class FootballEnv:
 
     def _get_state(self):
         """Return state as a hashable tuple of ints."""
-        return (
+        state = (
             self.agent_pos[0],
             self.agent_pos[1],
             self.ball_pos[0],
             self.ball_pos[1],
             int(self.has_ball),
         )
+        if self.level >= 3:
+            state += (self.opp_pos[0], self.opp_pos[1])
+        return state
