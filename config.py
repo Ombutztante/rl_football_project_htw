@@ -3,7 +3,7 @@ GRID_WIDTH = 6
 GRID_HEIGHT = 4
 
 # Active level (1, 2 or 3)
-LEVEL = 1
+LEVEL = 2
 
 # Episode settings
 MAX_STEPS = 200
