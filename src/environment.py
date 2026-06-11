@@ -154,6 +154,26 @@ class FootballEnv:
 
         return self._get_state(), reward, self.done
 
+    def state_to_array(self, state):
+        """
+        Convert a state tuple to a normalised float numpy array for DQN input.
+
+        Layout (coordinates divided by grid dimensions − 1 to land in [0, 1]):
+            Level 1+2 (7 values):  ax, ay, bx, by, has_ball, gx, gy
+            Level 3   (9 values):  ax, ay, bx, by, has_ball, gx, gy, opp_x, opp_y
+        """
+        W, H = self.width - 1, self.height - 1
+        gx, gy = self.goal_pos
+        ax, ay, bx, by, has_ball = state[0], state[1], state[2], state[3], state[4]
+        arr = [ax / W, ay / H, bx / W, by / H, float(has_ball), gx / W, gy / H]
+        if self.level >= 3:
+            arr += [state[5] / W, state[6] / H]
+        return np.array(arr, dtype=np.float32)
+
+    def get_state_size(self):
+        """Return the length of the array produced by state_to_array()."""
+        return 9 if self.level >= 3 else 7
+
     def render(self):
         """Print ASCII grid to stdout."""
         grid = [["." for _ in range(self.width)] for _ in range(self.height)]
