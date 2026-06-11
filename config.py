@@ -7,7 +7,7 @@ LEVEL = 1
 
 # Episode settings
 MAX_STEPS = 200
-N_EPISODES = 2000
+N_EPISODES = 300
 
 # Shooting zone: columns from which a shoot is considered a "good position"
 # (agent_x >= SHOOT_ZONE_X). For a 6-wide grid this means x=4 or x=5.
