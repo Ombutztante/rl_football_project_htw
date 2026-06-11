@@ -41,8 +41,9 @@ class DQNAgent:
       - Gradient clipping (GRAD_CLIP_NORM) — prevents gradient explosion
       - Replay warm-up (REPLAY_WARMUP) — learning only starts once the buffer
         holds enough diverse transitions
-      - Target network synced externally by the training script every
-        TARGET_UPDATE_FREQ episodes (call update_target_network())
+      - Soft target update (TAU) after every gradient step:
+            target = τ·online + (1-τ)·target
+        No hard copy, no abrupt anchor loss → eliminates the periodic dip.
 
     The agent works on normalised float state arrays (env.state_to_array()).
     The training script is responsible for the conversion:
@@ -53,7 +54,7 @@ class DQNAgent:
         agent.store(state_arr, action, reward, next_state_arr, done)
         agent.learn()
 
-    Call decay_epsilon() and (every N episodes) update_target_network() per episode.
+    Call decay_epsilon() once per episode.
     """
 
     def __init__(
@@ -80,6 +81,7 @@ class DQNAgent:
         self.epsilon_decay = epsilon_decay if epsilon_decay is not None else config.DQN_EPSILON_DECAY
         self.batch_size = batch_size if batch_size is not None else config.BATCH_SIZE
         self.grad_clip_norm = grad_clip_norm if grad_clip_norm is not None else config.GRAD_CLIP_NORM
+        self.tau = config.TAU
         # Warm-up must be at least batch_size so the first sample call always succeeds
         warmup = replay_warmup if replay_warmup is not None else config.REPLAY_WARMUP
         self.replay_warmup = max(warmup, self.batch_size)
@@ -145,12 +147,11 @@ class DQNAgent:
         nn.utils.clip_grad_norm_(self.q_net.parameters(), self.grad_clip_norm)
         self.optimizer.step()
 
-        return loss.item()
+        # Soft target update: θ_target = τ·θ_online + (1-τ)·θ_target
+        for target_p, online_p in zip(self.target_net.parameters(), self.q_net.parameters()):
+            target_p.data.copy_(self.tau * online_p.data + (1.0 - self.tau) * target_p.data)
 
-    def update_target_network(self):
-        """Copy online network weights into the target network.
-        Call this from the training script every TARGET_UPDATE_FREQ episodes."""
-        self.target_net.load_state_dict(self.q_net.state_dict())
+        return loss.item()
 
     def decay_epsilon(self):
         """Multiply epsilon by decay factor, floored at epsilon_min."""

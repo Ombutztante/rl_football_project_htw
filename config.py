@@ -58,8 +58,8 @@ DQN_EPSILON_START = 1.0
 DQN_EPSILON_MIN = 0.05
 DQN_EPSILON_DECAY = 0.995
 BATCH_SIZE = 64
-MEMORY_SIZE = 10000
-TARGET_UPDATE_FREQ = 100   # episodes between target network syncs (controlled in training script)
+MEMORY_SIZE = 15000        # slightly larger buffer keeps diverse experiences longer
+TAU = 0.005                # soft target update factor: target = τ·online + (1-τ)·target
 REPLAY_WARMUP = 500        # minimum buffer size before learning starts
 GRAD_CLIP_NORM = 1.0       # max gradient norm for clipping
 HIDDEN_SIZE = 128
