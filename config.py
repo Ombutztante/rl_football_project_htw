@@ -65,6 +65,7 @@ GRAD_CLIP_NORM = 1.0       # max gradient norm for clipping
 HIDDEN_SIZE = 128
 
 # Output paths
-MODELS_DIR = "results/models"
-LOGS_DIR = "results/logs"
-PLOTS_DIR = "results/plots"
+MODELS_DIR      = "results/models"
+LOGS_DIR        = "results/logs"
+PLOTS_DIR       = "results/plots"       # static PNG plots
+ANIMATIONS_DIR  = "results/animations"  # animated GIFs
