@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import glob
 import json
@@ -59,7 +59,7 @@ def _final_stats(log, last_n=100):
 
 
 def main():
-    levels = [1, 2, 3]
+    levels = [1, 2, 3, 4]
 
     # Load all logs
     qt_logs  = {lv: _load(os.path.join(config.LOGS_DIR, f"q_table_level{lv}_ep*.json"))
@@ -70,7 +70,7 @@ def main():
     # -----------------------------------------------------------------------
     # Figure layout
     # -----------------------------------------------------------------------
-    fig = plt.figure(figsize=(16, 9), facecolor=C_BG)
+    fig = plt.figure(figsize=(20, 9), facecolor=C_BG)
     fig.text(0.5, 0.965,
              "Q-Table  vs.  DQN  —  Ergebnisübersicht",
              ha="center", va="top", fontsize=16, fontweight="bold", color=C_TXT)
@@ -78,10 +78,11 @@ def main():
              "Reinforcement Learning  |  Computational Intelligence  |  HTW Berlin",
              ha="center", va="top", fontsize=10, color=C_DIM)
 
-    # Top row: goal-rate curves per level  (3 panels)
+    n_levels = len(levels)
+    # Top row: goal-rate curves per level  (n_levels panels)
     # Bottom:  final performance bars      (1 wide panel)
     gs = gridspec.GridSpec(
-        2, 3,
+        2, n_levels,
         figure=fig,
         top=0.90, bottom=0.10,
         left=0.06, right=0.97,

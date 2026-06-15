@@ -20,6 +20,7 @@ SHOOT_ZONE_X = GRID_WIDTH - 2  # = 8
 BALL_START_X_L1 = None
 BALL_START_X_L2 = 1
 BALL_START_X_L3 = 1
+BALL_START_X_L4 = 1
 
 # Rewards — shared across all levels
 REWARD_STEP = -1           # every step
@@ -43,6 +44,17 @@ REWARD_GOAL_L3 = 50        # goal scored in Level 3
 REWARD_BAD_SHOT_L3 = -5    # shoot without ball in Level 3
 REWARD_OPP_REACHES_BALL = -10  # opponent reaches loose ball → episode ends
 REWARD_BALL_LOST = -20     # opponent tackles agent who has ball → episode ends
+
+# Level 4 — static obstacle (vertical wall, 1 column wide, 4 rows tall)
+# Rows 0–3 at column 6 are blocked; rows 4–5 are free to pass around below.
+OBSTACLE_X       = 6  # column of the obstacle
+OBSTACLE_Y_START = 0  # first blocked row (0 = top)
+OBSTACLE_HEIGHT  = 4  # number of blocked rows
+
+# Rewards — Level 4 (extends Level 3 + obstacle)
+REWARD_GOAL_L4      = 60  # goal scored (harder than L3, so higher reward)
+REWARD_HIT_OBSTACLE = -2  # agent walks into obstacle wall
+REWARD_SHOT_BLOCKED = -5  # shot intercepted by obstacle
 
 # Level 3 opponent
 # Opponent starts at x = (GRID_WIDTH - 1) - OPP_START_X_FROM_GOAL, y = 0 (top row)

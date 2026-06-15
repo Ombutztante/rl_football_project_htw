@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import argparse
 import glob
@@ -36,6 +36,7 @@ C = {
     "cell":      "#1E2A4A",
     "zone":      "#3D3200",
     "goal":      "#0D3018",
+    "obstacle":  "#2D2D2D",
     "agent_qt":  "#4FC3F7",
     "agent_dqn": "#CE93D8",
     "pball_qt":  "#B2EBF2",
@@ -51,8 +52,14 @@ C = {
 
 
 def _find_model(pattern):
-    files = sorted(glob.glob(pattern))
-    return files[-1] if files else None
+    import re as _re
+    files = [f for f in glob.glob(pattern) if "_snapshots" not in f]
+    if not files:
+        return None
+    def _ep_key(p):
+        m = _re.search(r"_ep(\d+)", os.path.basename(p))
+        return int(m.group(1)) if m else 0
+    return max(files, key=_ep_key)
 
 
 def _load_qtable(level, ep=None):
@@ -102,14 +109,19 @@ def _draw_grid(ax, env, label, action, total_reward, done,
         for col in range(W):
             is_goal = (col == gx and row == gy)
             is_zone = (env.level == 1 and env.shoot_zone_x <= col < W - 1)
-            fc = C["goal"] if is_goal else (C["zone"] if is_zone else C["cell"])
-            ec = C["goal_edge"] if is_goal else C["border"]
-            lw = 2.0 if is_goal else 0.7
+            is_obstacle = (env.level >= 4 and (col, row) in env.obstacle_cells)
+            fc = C["goal"] if is_goal else (C["obstacle"] if is_obstacle else (C["zone"] if is_zone else C["cell"]))
+            ec = C["goal_edge"] if is_goal else ("#555555" if is_obstacle else C["border"])
+            lw = 2.0 if is_goal else (1.5 if is_obstacle else 0.7)
             ax.add_patch(FancyBboxPatch(
                 (col + 0.05, dy + 0.05), 0.9, 0.9,
                 boxstyle="round,pad=0.04",
                 facecolor=fc, edgecolor=ec, linewidth=lw, zorder=1,
             ))
+            if is_obstacle:
+                ax.text(col + 0.5, dy + 0.5, "#",
+                        ha="center", va="center", fontsize=10, fontweight="bold",
+                        color="#888888", zorder=2)
 
     ax.text(gx + 0.5, H - 1 - gy + 0.5, "G",
             ha="center", va="center", fontsize=15, fontweight="bold",
@@ -207,7 +219,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="Vergleichs-GIF: Q-Table vs. DQN nebeneinander"
     )
-    ap.add_argument("--level", type=int, choices=[1, 2, 3], default=3)
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4], default=3)
     ap.add_argument("--fps",   type=int, default=3)
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--episodes", type=int, default=None,

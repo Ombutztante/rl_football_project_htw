@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import json
 import numpy as np
@@ -145,8 +145,13 @@ def _plot_stem(log_path):
 
 
 if __name__ == "__main__":
-    level = config.LEVEL
-    ep    = config.N_EPISODES
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--level", type=int, default=None)
+    ap.add_argument("--episodes", type=int, default=None)
+    _args = ap.parse_args()
+    level = _args.level if _args.level is not None else config.LEVEL
+    ep    = _args.episodes if _args.episodes is not None else config.N_EPISODES
 
     q_log   = os.path.join(config.LOGS_DIR,  f"q_table_level{level}_ep{ep}.json")
     dqn_log = os.path.join(config.LOGS_DIR,  f"dqn_level{level}_ep{ep}.json")

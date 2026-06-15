@@ -8,17 +8,19 @@ import config
 
 class FootballEnv:
     """
-    2D Gridworld football environment — supports Level 1, 2, and 3.
+    2D Gridworld football environment — supports Level 1, 2, 3, and 4.
     The active level is read from config.LEVEL (or passed as argument).
 
-    Grid layout (6x4 default, width x height):
+    Grid layout (10x6 default, width x height):
 
-        . . . . . .
-        . . . . . .
-        A . . B . G
-        . . . . . .
+        . . . . . . . . . .
+        . . . . . . . . . .
+        . . . . . . . . . .
+        A . B . . . . . . G
+        . . . . . . . . . .
+        . . . . . . . . . .
 
-    A = Agent without ball, P = Agent with ball, B = Ball, G = Goal, X = Opponent
+    A = Agent without ball, P = Agent with ball, B = Ball, G = Goal, X = Opponent, # = Obstacle
 
     Level 1 — shoot only from good position
         Agent picks up ball, reaches shooting zone, shoots.
@@ -35,8 +37,13 @@ class FootballEnv:
         every OPP_MOVE_EVERY agent steps.
         Episode ends with a penalty when opponent reaches the ball.
 
-    State (Level 1+2):  tuple (agent_x, agent_y, ball_x, ball_y, has_ball)               — 5 elements
-    State (Level 3):    tuple (agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y) — 7 elements
+    Level 4 — obstacle blocks direct shots (extends Level 3)
+        Same mechanics as Level 3 plus a static vertical wall at column OBSTACLE_X.
+        The obstacle blocks both agent movement and forward passes.
+        Rows 4–5 are free so the agent can navigate around below the obstacle.
+
+    State (Level 1+2):    tuple (agent_x, agent_y, ball_x, ball_y, has_ball)               — 5 elements
+    State (Level 3+4):    tuple (agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y) — 7 elements
     Actions: 0=up  1=down  2=left  3=right  4=shoot  (always 5)
     Returns: reset() -> state
              step(action) -> (next_state, reward, done)
@@ -60,12 +67,18 @@ class FootballEnv:
             1: config.BALL_START_X_L1,
             2: config.BALL_START_X_L2,
             3: config.BALL_START_X_L3,
+            4: config.BALL_START_X_L4,
         }
         raw_ball_x = _ball_x_cfg.get(self.level)
         ball_x = raw_ball_x if raw_ball_x is not None else self.width // 2
         self._ball_start = (ball_x, self.height // 2)
 
         self.n_actions = 5
+
+        self.obstacle_cells = frozenset(
+            (config.OBSTACLE_X, y)
+            for y in range(config.OBSTACLE_Y_START, config.OBSTACLE_Y_START + config.OBSTACLE_HEIGHT)
+        ) if self.level >= 4 else frozenset()
 
         self.reset()
 
@@ -131,8 +144,14 @@ class FootballEnv:
             prev_dist = self._dist_to_goal()
 
             dx, dy = self._DELTA[action]
-            self.agent_pos[0] = int(np.clip(self.agent_pos[0] + dx, 0, self.width - 1))
-            self.agent_pos[1] = int(np.clip(self.agent_pos[1] + dy, 0, self.height - 1))
+            new_x = int(np.clip(self.agent_pos[0] + dx, 0, self.width - 1))
+            new_y = int(np.clip(self.agent_pos[1] + dy, 0, self.height - 1))
+
+            if self.level >= 4 and (new_x, new_y) in self.obstacle_cells:
+                reward += config.REWARD_HIT_OBSTACLE  # blocked, agent stays in place
+            else:
+                self.agent_pos[0] = new_x
+                self.agent_pos[1] = new_y
 
             # Ball follows agent when carried
             if self.has_ball:
@@ -149,7 +168,12 @@ class FootballEnv:
 
             # Level 2+: agent dribbles ball into goal cell → score
             if self.level >= 2 and self.has_ball and self.agent_pos == list(self.goal_pos):
-                goal_reward = config.REWARD_GOAL_L3 if self.level >= 3 else config.REWARD_GOAL_L2
+                if self.level >= 4:
+                    goal_reward = config.REWARD_GOAL_L4
+                elif self.level >= 3:
+                    goal_reward = config.REWARD_GOAL_L3
+                else:
+                    goal_reward = config.REWARD_GOAL_L2
                 reward += goal_reward
                 self.done = True
 
@@ -167,8 +191,8 @@ class FootballEnv:
         Convert a state tuple to a normalised float numpy array for DQN input.
 
         Layout (coordinates divided by grid dimensions − 1 to land in [0, 1]):
-            Level 1+2 (7 values):  ax, ay, bx, by, has_ball, gx, gy
-            Level 3   (9 values):  ax, ay, bx, by, has_ball, gx, gy, opp_x, opp_y
+            Level 1+2   (7 values):  ax, ay, bx, by, has_ball, gx, gy
+            Level 3+4   (9 values):  ax, ay, bx, by, has_ball, gx, gy, opp_x, opp_y
         """
         W, H = self.width - 1, self.height - 1
         gx, gy = self.goal_pos
@@ -190,6 +214,11 @@ class FootballEnv:
             for y in range(self.height):
                 for x in range(self.shoot_zone_x, self.width - 1):
                     grid[y][x] = ","
+
+        if self.level >= 4:
+            for (ox, oy) in sorted(self.obstacle_cells):
+                if 0 <= ox < self.width and 0 <= oy < self.height:
+                    grid[oy][ox] = "#"
 
         gx, gy = self.goal_pos
         grid[gy][gx] = "G"
@@ -259,42 +288,62 @@ class FootballEnv:
 
     def _shoot_forward_pass(self):
         """
-        Level 2+3 shoot: ball travels SHOOT_RANGE cells to the right.
+        Level 2+: ball travels SHOOT_RANGE cells to the right.
         Level 2: no-ball = -3, goal = +40
         Level 3: no-ball = -5, goal = +50
+        Level 4: no-ball = -5, goal = +60, obstacle blocks shot
         """
         if not self.has_ball:
-            # Different wasted-shot penalty per level
             return config.REWARD_SHOOT_WASTED if self.level == 2 else config.REWARD_BAD_SHOT_L3
 
-        goal_reward = config.REWARD_GOAL_L2 if self.level == 2 else config.REWARD_GOAL_L3
+        if self.level == 2:
+            goal_reward = config.REWARD_GOAL_L2
+        elif self.level == 3:
+            goal_reward = config.REWARD_GOAL_L3
+        else:
+            goal_reward = config.REWARD_GOAL_L4
 
         bx, by = self.ball_pos
         gx, gy = self.goal_pos
-        raw_new_bx = bx + config.SHOOT_RANGE
-
         self.has_ball = False
 
+        # Level 4: step through each cell to detect obstacle collision
+        if self.level >= 4:
+            for step in range(1, config.SHOOT_RANGE + 1):
+                check_x = bx + step
+                if check_x >= self.width:
+                    self.ball_pos = [self.width - 1, by]
+                    if by == gy:
+                        self.done = True
+                        return goal_reward
+                    return config.REWARD_BALL_OUT
+                if [check_x, by] == list(self.goal_pos):
+                    self.ball_pos = [check_x, by]
+                    self.done = True
+                    return goal_reward
+                if (check_x, by) in self.obstacle_cells:
+                    self.ball_pos = [check_x - 1, by]
+                    return config.REWARD_SHOT_BLOCKED
+            self.ball_pos = [bx + config.SHOOT_RANGE, by]
+            old_dist = abs(bx - gx) + abs(by - gy)
+            new_dist = abs(self.ball_pos[0] - gx) + abs(by - gy)
+            return config.REWARD_PASS_CLOSER if new_dist < old_dist else 0
+
+        # Level 2/3: direct calculation
+        raw_new_bx = bx + config.SHOOT_RANGE
         if raw_new_bx >= self.width:
-            # Ball would exit the right side
             self.ball_pos = [self.width - 1, by]
             if by == gy:
                 self.done = True
                 return goal_reward
-            else:
-                return config.REWARD_BALL_OUT  # -5
-
-        # Ball stays in field
+            return config.REWARD_BALL_OUT
         self.ball_pos = [raw_new_bx, by]
         if self.ball_pos == list(self.goal_pos):
             self.done = True
             return goal_reward
-
         old_dist = abs(bx - gx) + abs(by - gy)
         new_dist = abs(raw_new_bx - gx) + abs(by - gy)
-        if new_dist < old_dist:
-            return config.REWARD_PASS_CLOSER  # +2
-        return 0
+        return config.REWARD_PASS_CLOSER if new_dist < old_dist else 0
 
     def _move_and_check_opponent(self):
         """

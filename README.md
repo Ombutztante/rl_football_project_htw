@@ -153,3 +153,36 @@ Der Agent muss lernen: *Schieße ich sofort weiter, bevor der Gegner kommt? Oder
 | Schuss ohne Ball | −5 |
 | Gegner erreicht losen Ball (Episode endet) | −10 |
 | Gegner tackelt Agent mit Ball (Episode endet) | −20 |
+
+---
+
+### Level 4 — Hindernis blockiert direkten Schuss
+
+```
+. . . . . . # . X .   ← Gegner startet oben rechts
+. . . . . . # . . .
+. . . . . . # . . .
+A B . . . . # . . G   ← Hindernis bei Spalte 6, Zeilen 0–3
+. . . . . . . . . .   ← freie Zeilen zum Umgehen
+. . . . . . . . . .
+
+# = Hindernis  X = Gegner  A = Agent  B = Ball  G = Tor
+```
+
+Gleiche Mechanik wie Level 3, aber ein **statisches Hindernis** (1 Spalte breit, 4 Zeilen hoch) bei Spalte 6 kommt hinzu. Es blockiert sowohl die Bewegung des Agenten als auch Vorwärtspässe. Schüsse, die auf das Hindernis treffen, werden gestoppt — der Ball bleibt einen Schritt davor liegen. Die unteren zwei Zeilen (4–5) sind frei, damit der Agent drum herumnavigieren kann.
+
+**Zustand (7 Elemente):** `(agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y)`
+
+| Ereignis | Reward |
+|----------|--------|
+| Tor | +60 |
+| Ball aufgenommen | +5 |
+| Näher zum Tor bewegt | +1 |
+| Ball per Pass näher ans Tor | +2 |
+| Schritt | −1 |
+| Ball verlässt rechte Wand ohne Tor | −5 |
+| Schuss ohne Ball | −5 |
+| Schuss vom Hindernis geblockt | −5 |
+| Agent läuft gegen Hindernis | −2 |
+| Gegner erreicht losen Ball (Episode endet) | −10 |
+| Gegner tackelt Agent mit Ball (Episode endet) | −20 |

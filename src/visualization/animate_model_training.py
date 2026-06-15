@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import argparse
 import copy
@@ -41,6 +41,7 @@ C = {
     "cell":      "#1E2A4A",
     "zone":      "#3D3200",
     "goal":      "#0D3018",
+    "obstacle":  "#2D2D2D",
     "agent":     "#4FC3F7",
     "pball":     "#CE93D8",
     "ball":      "#FF8A65",
@@ -163,14 +164,19 @@ def _render_game_frame(env, action=None, step_reward=0, total_reward=0,
         for col in range(W):
             is_goal = (col == gx and row == gy)
             is_zone = (env.level == 1 and env.shoot_zone_x <= col < W - 1)
-            fc = C["goal"] if is_goal else (C["zone"] if is_zone else C["cell"])
-            ec = C["goal_edge"] if is_goal else C["border"]
-            lw = 2.2 if is_goal else 0.9
+            is_obstacle = (env.level >= 4 and (col, row) in env.obstacle_cells)
+            fc = C["goal"] if is_goal else (C["obstacle"] if is_obstacle else (C["zone"] if is_zone else C["cell"]))
+            ec = C["goal_edge"] if is_goal else ("#555555" if is_obstacle else C["border"])
+            lw = 2.2 if is_goal else (1.5 if is_obstacle else 0.9)
             ax.add_patch(FancyBboxPatch(
                 (col + 0.05, dy + 0.05), 0.9, 0.9,
                 boxstyle="round,pad=0.04",
                 facecolor=fc, edgecolor=ec, linewidth=lw, zorder=1,
             ))
+            if is_obstacle:
+                ax.text(col + 0.5, dy + 0.5, "#",
+                        ha="center", va="center", fontsize=11, fontweight="bold",
+                        color="#888888", zorder=2)
 
     ax.text(gx + 0.5, H - 1 - gy + 0.5, "G",
             ha="center", va="center", fontsize=17, fontweight="bold",
@@ -241,6 +247,8 @@ def _render_game_frame(env, action=None, step_reward=0, total_reward=0,
         handles.append(mpatches.Patch(facecolor=C["zone"], label="Schusszone"))
     if env.level >= 3:
         handles.append(mpatches.Patch(facecolor=C["opp"], label="Gegner (X)"))
+    if env.level >= 4:
+        handles.append(mpatches.Patch(facecolor=C["obstacle"], edgecolor="#555555", label="Hindernis (#)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=len(handles),
               bbox_to_anchor=(0.5, -0.12), framealpha=0.92, edgecolor=C["border"])
 
@@ -489,7 +497,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="Trainingsevolution eines vorhandenen Modells als GIF"
     )
-    ap.add_argument("--level",     type=int, choices=[1, 2, 3], default=1)
+    ap.add_argument("--level",     type=int, choices=[1, 2, 3, 4], default=1)
     ap.add_argument("--agent",     choices=["qtable", "dqn"], default="qtable")
     ap.add_argument("--episodes",  type=int, default=None,
                     help="Episodenzahl des zu ladenden Snapshots (Standard: neuestes)")

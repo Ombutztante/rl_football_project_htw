@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import argparse
 import glob
@@ -38,6 +38,7 @@ C = {
     "cell":      "#1E2A4A",
     "zone":      "#3D3200",
     "goal":      "#0D3018",
+    "obstacle":  "#2D2D2D",
     "agent":     "#4FC3F7",
     "pball":     "#CE93D8",
     "ball":      "#FF8A65",
@@ -50,8 +51,14 @@ C = {
 
 
 def _find_model(pattern):
-    files = sorted(glob.glob(pattern))
-    return files[-1] if files else None
+    import re as _re
+    files = [f for f in glob.glob(pattern) if "_snapshots" not in f]
+    if not files:
+        return None
+    def _ep_key(p):
+        m = _re.search(r"_ep(\d+)", os.path.basename(p))
+        return int(m.group(1)) if m else 0
+    return max(files, key=_ep_key)
 
 
 def _load_qtable(level, ep=None):
@@ -104,14 +111,19 @@ def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done
         for col in range(W):
             is_goal = (col == gx and row == gy)
             is_zone = (env.level == 1 and env.shoot_zone_x <= col < W - 1)
-            fc = C["goal"] if is_goal else (C["zone"] if is_zone else C["cell"])
-            ec = C["goal_edge"] if is_goal else C["border"]
-            lw = 2.2 if is_goal else 0.9
+            is_obstacle = (env.level >= 4 and (col, row) in env.obstacle_cells)
+            fc = C["goal"] if is_goal else (C["obstacle"] if is_obstacle else (C["zone"] if is_zone else C["cell"]))
+            ec = C["goal_edge"] if is_goal else ("#555555" if is_obstacle else C["border"])
+            lw = 2.2 if is_goal else (1.5 if is_obstacle else 0.9)
             ax.add_patch(FancyBboxPatch(
                 (col + 0.05, dy + 0.05), 0.9, 0.9,
                 boxstyle="round,pad=0.04",
                 facecolor=fc, edgecolor=ec, linewidth=lw, zorder=1,
             ))
+            if is_obstacle:
+                ax.text(col + 0.5, dy + 0.5, "#",
+                        ha="center", va="center", fontsize=11, fontweight="bold",
+                        color="#888888", zorder=2)
 
     # Goal label
     ax.text(gx + 0.5, H - 1 - gy + 0.5, "G",
@@ -188,6 +200,8 @@ def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done
         handles.append(mpatches.Patch(facecolor=C["zone"], label="Schusszone"))
     if env.level >= 3:
         handles.append(mpatches.Patch(facecolor=C["opp"], label="Gegner (X)"))
+    if env.level >= 4:
+        handles.append(mpatches.Patch(facecolor=C["obstacle"], edgecolor="#555555", label="Hindernis (#)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=len(handles),
               bbox_to_anchor=(0.5, -0.12), framealpha=0.92, edgecolor=C["border"])
 
@@ -241,8 +255,8 @@ def save_gif(frames, path, fps):
 
 def main():
     ap = argparse.ArgumentParser(description="Animierte GIFs von trainierten RL-Agenten")
-    ap.add_argument("--level", type=int, choices=[1, 2, 3],
-                    help="Level (1/2/3); Standard: alle")
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4],
+                    help="Level (1/2/3/4); Standard: alle")
     ap.add_argument("--agent", choices=["qtable", "dqn", "both"], default="both",
                     help="Welchen Agenten animieren (Standard: beide)")
     ap.add_argument("--episodes", type=int, default=None,
