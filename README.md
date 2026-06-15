@@ -1,7 +1,7 @@
 # rl_football_project_htw
 
 Reinforcement Learning Projekt im Fach Computational Intelligence — HTW Berlin.  
-Ein Agent lernt in einer 2D-Gridworld-Fußballumgebung durch Q-Learning und DQN (PyTorch), den Ball zu holen, in Position zu gehen und ein Tor zu schießen.
+Eine 2D-Gridworld-Fußballumgebung, in der ein Agent den Ball holen, in Position gehen und ein Tor schießen muss.
 
 ---
 
@@ -10,35 +10,13 @@ Ein Agent lernt in einer 2D-Gridworld-Fußballumgebung durch Q-Learning und DQN 
 ```
 rl_football_project_htw/
 │
-├── config.py                   # Zentrale Konfiguration: Gridgröße, Level, Rewards, Hyperparameter
+├── config.py           # Gridgröße, Level, Rewards, Spielparameter
 │
 ├── src/
-│   ├── environment.py          # Gridworld-Umgebung: Zustand, Aktionen, Rewards, Render
-│   ├── q_table_agent.py        # Tabellarischer Q-Learning-Agent (Q-Tabelle als Dictionary)
-│   ├── dqn_agent.py            # DQN-Agent mit PyTorch (neuronales Netz, Replay Buffer)
-│   ├── train_q_table.py        # Trainingsloop für den Q-Table-Agenten
-│   ├── train_dqn.py            # Trainingsloop für den DQN-Agenten
-│   ├── utils.py                # Hilfsfunktionen: ReplayBuffer, Seeding
-│   └── visualize.py            # Plots: Lernkurven, Epsilon-Verlauf, Vergleich Q-Table vs. DQN
+│   ├── environment.py  # Gridworld-Umgebung: Zustand, Aktionen, Rewards, Render
+│   └── play.py         # Manuelles Spielen über Matplotlib-Fenster (Tastatur)
 │
-├── tests/
-│   └── test_environment.py     # Pytest-Tests für reset(), step() und alle Reward-Mechaniken
-│
-├── notebooks/
-│   └── experiments.ipynb       # Jupyter Notebook für interaktive Experimente und Auswertung
-│
-├── docs/
-│   ├── entscheidungen.md       # Dokumentierte Design- und Algorithmik-Entscheidungen
-│   ├── projektplan.md          # Projektplan und Zeitplanung
-│   └── vortrag_notizen.md      # Notizen für den Abschlussvortrag
-│
-├── results/
-│   ├── models/                 # Gespeicherte Modelle (Q-Tabelle als .pkl, DQN als .pt)
-│   ├── logs/                   # Trainingsmetriken pro Episode (JSON)
-│   └── plots/                  # Generierte Diagramme (PNG)
-│
-├── requirements.txt            # Python-Abhängigkeiten
-└── CLAUDE.md                   # Projektdokumentation für Claude Code
+└── requirements.txt    # Python-Abhängigkeiten (numpy, matplotlib)
 ```
 
 ---
@@ -46,23 +24,33 @@ rl_football_project_htw/
 ## Setup
 
 ```bash
+python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Wichtigste Befehle
+## Manuell spielen
 
 ```bash
-python src/train_q_table.py     # Q-Table Training starten
-python src/train_dqn.py         # DQN Training starten
-python -m pytest tests/         # Tests ausführen
+python src/play.py
 ```
+
+Ein Matplotlib-Fenster öffnet sich. Steuerung:
+
+| Taste | Aktion |
+|-------|--------|
+| Pfeiltasten | Agent bewegen (hoch / runter / links / rechts) |
+| Leertaste oder `S` | Schießen |
+| `R` | Episode neu starten |
+| `Q` | Beenden |
+
+Das aktive Level wird in `config.py` über `LEVEL = 1 | 2 | 3` gewählt.
 
 ---
 
 ## Umgebung: Die drei Level
 
-Das aktive Level wird in `config.py` über `LEVEL = 1 | 2 | 3` gesteuert. Alle Level teilen dasselbe Grid (Standard 6×4) und dieselben 5 Aktionen:
+Das Grid ist standardmäßig 6×4 Felder groß. Alle Level teilen dieselben 5 Aktionen:
 
 | Aktion | Bedeutung |
 |--------|-----------|
@@ -85,13 +73,13 @@ A . . B , G
 A = Agent  B = Ball  G = Tor  , = Schusszone
 ```
 
-Der Agent muss den Ball aufnehmen, in die **Schusszone** (`x ≥ SHOOT_ZONE_X`, Standard: x=4) laufen und von dort schießen. `shoot` ist nur nützlich, wenn der Agent in der richtigen Zone UND in der richtigen Reihe steht — der Agent lernt situationsabhängige Aktionsauswahl.
+Der Agent muss den Ball aufnehmen, in die **Schusszone** (`x ≥ SHOOT_ZONE_X`, Standard: x=4) laufen und von dort schießen.
 
 **Zustand (5 Elemente):** `(agent_x, agent_y, ball_x, ball_y, has_ball)`
 
 | Ereignis | Reward |
 |----------|--------|
-| Tor (Schuss aus Zone, richtige Reihe) | +30 |
+| Tor (Schuss aus Zone) | +30 |
 | Ball aufgenommen | +5 |
 | Näher zum Tor bewegt | +1 |
 | Schritt | −1 |
@@ -109,13 +97,13 @@ A . . B . G
 . . . . . .
 ```
 
-`shoot` schießt den Ball **`SHOOT_RANGE` Felder nach rechts** (Standard: 3). Der Agent verliert den Ball und muss ihn nachholen. Es entsteht eine echte Entscheidung: langsam und sicher dribbling zum Tor, oder schneller Vorwärtspass mit dem Risiko, den Ball zu verlieren.
+`shoot` schießt den Ball **`SHOOT_RANGE` Felder nach rechts** (Standard: 3). Der Agent verliert den Ball und muss ihn nachholen — echte Entscheidung zwischen langsamem Dribbling und riskantem Vorwärtspass.
 
 **Zustand (5 Elemente):** `(agent_x, agent_y, ball_x, ball_y, has_ball)`
 
 | Ereignis | Reward |
 |----------|--------|
-| Tor (Dribbling ins Tor oder Pass landet auf Tor) | +40 |
+| Tor | +40 |
 | Ball aufgenommen | +5 |
 | Näher zum Tor bewegt | +1 |
 | Ball per Pass näher ans Tor | +2 |
@@ -136,15 +124,13 @@ A . . B . G
 X = Gegner (regelbasiert)
 ```
 
-Gleiche Mechanik wie Level 2, aber ein **regelbasierter Gegner** kommt hinzu. Der Gegner startet oben rechts bei `(goal_x − OPP_START_X_FROM_GOAL, 0)` (Standard: x=4, y=0) und bewegt sich alle `OPP_MOVE_EVERY` Schritte (Standard: 2) einen Schritt in Richtung Ball. Erreicht er den Ball, endet die Episode mit einer Strafe.
-
-Der Agent muss lernen: *Schieße ich sofort weiter, bevor der Gegner kommt? Oder dribble ich sicher?*
+Gleiche Mechanik wie Level 2, aber ein **regelbasierter Gegner** kommt hinzu. Er startet bei `(goal_x − OPP_START_X_FROM_GOAL, 0)` (Standard: x=4, y=0) und bewegt sich alle `OPP_MOVE_EVERY` Schritte (Standard: 2) einen Schritt in Richtung Ball. Erreicht er den Ball, endet die Episode mit einer Strafe.
 
 **Zustand (7 Elemente):** `(agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y)`
 
 | Ereignis | Reward |
 |----------|--------|
-| Tor (Dribbling ins Tor oder Pass landet auf Tor) | +50 |
+| Tor | +50 |
 | Ball aufgenommen | +5 |
 | Näher zum Tor bewegt | +1 |
 | Ball per Pass näher ans Tor | +2 |
