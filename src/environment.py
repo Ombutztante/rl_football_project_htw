@@ -54,8 +54,16 @@ class FootballEnv:
 
         # Fixed positions — goal: right edge, centre row
         self.goal_pos = (self.width - 1, self.height // 2)
-        self._ball_start = (self.width // 2, self.height // 2)
         self._agent_start = (0, self.height // 2)
+
+        _ball_x_cfg = {
+            1: config.BALL_START_X_L1,
+            2: config.BALL_START_X_L2,
+            3: config.BALL_START_X_L3,
+        }
+        raw_ball_x = _ball_x_cfg.get(self.level)
+        ball_x = raw_ball_x if raw_ball_x is not None else self.width // 2
+        self._ball_start = (ball_x, self.height // 2)
 
         self.n_actions = 5
 

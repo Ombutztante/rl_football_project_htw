@@ -52,10 +52,10 @@ def test_l1_boundary_top_wall():
 
 
 def test_l1_step_penalty_when_moving_away():
-    # (4,2) → down → (4,3): dist to goal increases, no shaping, no pickup
+    # (4,3) → down → (4,4): dist to goal (9,3) increases, no shaping, no pickup
     env = FootballEnv(level=1)
     env.reset()
-    env.agent_pos = [4, 2]
+    env.agent_pos = [4, 3]
     _, reward, _ = env.step(1)  # down
     assert reward == -1
 
@@ -79,11 +79,11 @@ def test_l1_ball_pickup_sets_has_ball():
 
 
 def test_l1_ball_pickup_reward():
-    # Agent at (2,2), ball at (3,2), goal at (5,2)
+    # Agent at (bx-1, by), ball at (5,3), goal at (9,3)
     # step(-1) + pickup(+5) + closer(+1) = 5
     env = FootballEnv(level=1)
     env.reset()
-    bx, by = env.ball_pos  # (3,2)
+    bx, by = env.ball_pos  # (5,3)
     env.agent_pos = [bx - 1, by]
     _, reward, _ = env.step(3)
     assert reward == 5
@@ -121,22 +121,24 @@ def test_l1_shoot_bad_position_gives_penalty():
 
 
 def test_l1_shoot_in_zone_aligned_scores():
+    # SHOOT_ZONE_X=8, goal row=3 → agent at (8,3)
     env = FootballEnv(level=1)
     env.reset()
-    env.agent_pos = [4, 2]
+    env.agent_pos = [8, 3]
     env.has_ball = True
-    env.ball_pos = [4, 2]
+    env.ball_pos = [8, 3]
     _, reward, done = env.step(4)
     assert done
     assert reward == 29   # -1 (step) + 30 (goal)
 
 
 def test_l1_shoot_in_zone_wrong_row_is_miss():
+    # SHOOT_ZONE_X=8, row 0 ≠ goal row 3 → miss, ball to right wall
     env = FootballEnv(level=1)
     env.reset()
-    env.agent_pos = [4, 0]
+    env.agent_pos = [8, 0]
     env.has_ball = True
-    env.ball_pos = [4, 0]
+    env.ball_pos = [8, 0]
     _, reward, done = env.step(4)
     assert not done
     assert reward == -1   # only step penalty
@@ -228,10 +230,10 @@ def test_l2_forward_pass_exits_wrong_row_gives_penalty():
     # Ball exits right wall at wrong row → -5
     env = FootballEnv(level=2)
     env.reset()
-    # Agent at x=3, SHOOT_RANGE=3 → raw_new=6 → exits
-    env.agent_pos = [3, 0]   # row 0 ≠ goal_row 2
+    # Agent at x=7, SHOOT_RANGE=3 → raw_new=10 → exits (width=10)
+    env.agent_pos = [7, 0]   # row 0 ≠ goal_row 3
     env.has_ball = True
-    env.ball_pos = [3, 0]
+    env.ball_pos = [7, 0]
     _, reward, done = env.step(4)
     assert not done
     assert reward == -6      # -1 (step) + -5 (out)
@@ -244,9 +246,9 @@ def test_l2_forward_pass_exits_goal_row_scores():
     env = FootballEnv(level=2)
     env.reset()
     _, gy = env.goal_pos
-    env.agent_pos = [3, gy]   # row == goal row, raw_new = 6 → exits → GOAL
+    env.agent_pos = [7, gy]   # row == goal row, raw_new = 10 → exits → GOAL
     env.has_ball = True
-    env.ball_pos = [3, gy]
+    env.ball_pos = [7, gy]
     _, reward, done = env.step(4)
     assert done
     assert reward == 39      # -1 (step) + 40 (goal)
@@ -388,9 +390,9 @@ def test_l3_forward_pass_goal_scores_50():
     env = FootballEnv(level=3)
     env.reset()
     _, gy = env.goal_pos
-    env.agent_pos = [3, gy]
+    env.agent_pos = [7, gy]   # raw_new = 10 → exits at goal row → GOAL
     env.has_ball = True
-    env.ball_pos = [3, gy]
+    env.ball_pos = [7, gy]
     env.opp_pos = [0, 0]   # far away; step 1, no opponent move
     env.step_count = 0
     _, reward, done = env.step(4)  # pass exits at goal row → goal

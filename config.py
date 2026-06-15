@@ -1,17 +1,25 @@
 # Grid
-GRID_WIDTH = 6
-GRID_HEIGHT = 4
+GRID_WIDTH = 10
+GRID_HEIGHT = 6
 
 # Active level (1, 2 or 3)
 LEVEL = 1
 
 # Episode settings
-MAX_STEPS = 200
+MAX_STEPS = 300
 N_EPISODES = 500
 
 # Shooting zone: columns from which a shoot is considered a "good position"
-# (agent_x >= SHOOT_ZONE_X). For a 6-wide grid this means x=4 or x=5.
-SHOOT_ZONE_X = GRID_WIDTH - 2  # = 4
+# (agent_x >= SHOOT_ZONE_X). For a 10-wide grid this means x=8 or x=9.
+SHOOT_ZONE_X = GRID_WIDTH - 2  # = 8
+
+# Ball starting x-column per level (y is always height // 2)
+# Level 1: centre — agent must navigate to ball, then reach shooting zone
+# Level 2+: column 1 (near agent) — full field to cross, dribble-vs-pass decision has real weight
+# None → falls back to width // 2
+BALL_START_X_L1 = None
+BALL_START_X_L2 = 1
+BALL_START_X_L3 = 1
 
 # Rewards — shared across all levels
 REWARD_STEP = -1           # every step
@@ -37,10 +45,10 @@ REWARD_OPP_REACHES_BALL = -10  # opponent reaches loose ball → episode ends
 REWARD_BALL_LOST = -20     # opponent tackles agent who has ball → episode ends
 
 # Level 3 opponent
-# Opponent starts at x = (GRID_WIDTH - 1) - OPP_START_X_FROM_GOAL, y = GRID_HEIGHT // 2
-# With defaults (6×4 grid): x = 5 - 1 = 4, y = 2
+# Opponent starts at x = (GRID_WIDTH - 1) - OPP_START_X_FROM_GOAL, y = 0 (top row)
+# With defaults (10×6 grid): x = 9 - 1 = 8, y = 0
 # Tune OPP_START_X_FROM_GOAL and OPP_MOVE_EVERY to adjust difficulty.
-# On small grids (6×4) the agent learns to shoot immediately; larger grids allow richer tactics.
+# On larger grids the agent has more room to manoeuvre before the opponent closes in.
 OPP_START_X_FROM_GOAL = 1  # columns left of goal where opponent starts
 OPP_MOVE_EVERY = 2         # opponent moves 1 cell every N agent steps (1 = every step)
 
