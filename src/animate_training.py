@@ -444,20 +444,21 @@ def render_evolution_gif(snapshots, agent_type, level, n_episodes,
 # Main
 # ---------------------------------------------------------------------------
 
-def _load_snapshots(level, agent_type):
+def _load_snapshots(level, agent_type, ep=None):
     """Load snapshot file created by train_q_table.py / train_dqn.py."""
     import glob
     is_dqn = agent_type == "dqn"
     prefix = "dqn" if is_dqn else "q_table"
     ext    = "_snapshots.pt" if is_dqn else "_snapshots.pkl"
-    pattern = os.path.join(config.MODELS_DIR, f"{prefix}_level{level}_ep*{ext}")
+    suffix = f"ep{ep}" if ep else "ep*"
+    pattern = os.path.join(config.MODELS_DIR, f"{prefix}_level{level}_{suffix}{ext}")
     files = sorted(glob.glob(pattern))
     if not files:
         return None, None
     path = files[-1]
     if is_dqn:
         import torch
-        raw = torch.load(path, map_location="cpu")
+        raw = torch.load(path, map_location="cpu", weights_only=False)
     else:
         import pickle
         with open(path, "rb") as f:
@@ -490,6 +491,8 @@ def main():
     )
     ap.add_argument("--level",     type=int, choices=[1, 2, 3], default=1)
     ap.add_argument("--agent",     choices=["qtable", "dqn"], default="qtable")
+    ap.add_argument("--episodes",  type=int, default=None,
+                    help="Episodenzahl des zu ladenden Snapshots (Standard: neuestes)")
     ap.add_argument("--fps",       type=int, default=3)
     ap.add_argument("--max-steps", type=int, default=40)
     args = ap.parse_args()
@@ -498,7 +501,7 @@ def main():
     print(f"\nTrainings-Animation: {agent_label}  —  Level {args.level}")
     print("-" * 55)
 
-    snapshots, n_episodes = _load_snapshots(args.level, args.agent)
+    snapshots, n_episodes = _load_snapshots(args.level, args.agent, ep=args.episodes)
     if snapshots is None:
         print(f"Fehler: Keine Snapshot-Datei gefunden für {agent_label} Level {args.level}.")
         print(f"Führe zuerst das Training aus: python src/train_{'dqn' if args.agent == 'dqn' else 'q_table'}.py")
@@ -508,7 +511,7 @@ def main():
 
     out_path = os.path.join(
         config.ANIMATIONS_DIR,
-        f"training_evolution_{args.agent}_level{args.level}.gif",
+        f"training_evolution_{args.agent}_level{args.level}_ep{n_episodes}.gif",
     )
     render_evolution_gif(snapshots, args.agent, args.level, n_episodes,
                          fps=args.fps, out_path=out_path,

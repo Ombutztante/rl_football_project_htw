@@ -55,25 +55,33 @@ def _find_model(pattern):
     return files[-1] if files else None
 
 
-def _load_qtable(level):
-    path = _find_model(os.path.join(config.MODELS_DIR, f"q_table_level{level}_ep*.pkl"))
+def _load_qtable(level, ep=None):
+    suffix = f"ep{ep}" if ep else "ep*"
+    path = _find_model(os.path.join(config.MODELS_DIR, f"q_table_level{level}_{suffix}.pkl"))
     if not path:
-        return None
+        return None, None
     agent = QTableAgent(n_actions=5)
     agent.load(path)
     agent.epsilon = 0.0
-    return agent
+    import re
+    m = re.search(r"_ep(\d+)", os.path.basename(path))
+    loaded_ep = int(m.group(1)) if m else ep
+    return agent, loaded_ep
 
 
-def _load_dqn(level):
-    path = _find_model(os.path.join(config.MODELS_DIR, f"dqn_level{level}_ep*.pt"))
+def _load_dqn(level, ep=None):
+    suffix = f"ep{ep}" if ep else "ep*"
+    path = _find_model(os.path.join(config.MODELS_DIR, f"dqn_level{level}_{suffix}.pt"))
     if not path:
-        return None
+        return None, None
     env_tmp = FootballEnv(level=level)
     agent = DQNAgent(state_size=env_tmp.get_state_size(), n_actions=5)
     agent.load(path)
     agent.epsilon = 0.0
-    return agent
+    import re
+    m = re.search(r"_ep(\d+)", os.path.basename(path))
+    loaded_ep = int(m.group(1)) if m else ep
+    return agent, loaded_ep
 
 
 def _draw_grid(ax, env, label, action, total_reward, done,
@@ -202,11 +210,13 @@ def main():
     ap.add_argument("--level", type=int, choices=[1, 2, 3], default=3)
     ap.add_argument("--fps",   type=int, default=3)
     ap.add_argument("--max-steps", type=int, default=60)
+    ap.add_argument("--episodes", type=int, default=None,
+                    help="Episodenzahl des zu ladenden Modells (Standard: neuestes)")
     args = ap.parse_args()
 
     print(f"Lade Modelle für Level {args.level} ...")
-    qt_agent  = _load_qtable(args.level)
-    dqn_agent = _load_dqn(args.level)
+    qt_agent,  ep_qt  = _load_qtable(args.level, ep=args.episodes)
+    dqn_agent, ep_dqn = _load_dqn(args.level,    ep=args.episodes)
 
     if not qt_agent:
         print("Fehler: Kein Q-Table-Modell gefunden.")
@@ -214,6 +224,7 @@ def main():
     if not dqn_agent:
         print("Fehler: Kein DQN-Modell gefunden.")
         return
+    ep = ep_qt or ep_dqn
 
     env_qt  = FootballEnv(level=args.level)
     env_dqn = FootballEnv(level=args.level)
@@ -258,7 +269,7 @@ def main():
     target = frames[0].size
     frames = [f.resize(target, Image.LANCZOS) for f in frames]
 
-    out = os.path.join(config.ANIMATIONS_DIR, f"compare_level{args.level}.gif")
+    out = os.path.join(config.ANIMATIONS_DIR, f"compare_level{args.level}_ep{ep}.gif")
     os.makedirs(config.ANIMATIONS_DIR, exist_ok=True)
     frames[0].save(out, save_all=True, append_images=frames[1:],
                    loop=0, duration=int(1000 / args.fps), optimize=True)

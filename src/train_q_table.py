@@ -104,7 +104,11 @@ def train(n_snapshots=10):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
+    ap.add_argument("--level", type=int, default=None,
+                    help="Überschreibt config.LEVEL (1, 2 oder 3)")
     ap.add_argument("--n-snapshots", type=int, default=10,
                     help="Anzahl der Zwischenstände für animate_training.py (Standard: 10)")
     args = ap.parse_args()
+    if args.level is not None:
+        config.LEVEL = args.level
     train(n_snapshots=args.n_snapshots)

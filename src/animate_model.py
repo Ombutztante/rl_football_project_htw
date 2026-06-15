@@ -54,27 +54,35 @@ def _find_model(pattern):
     return files[-1] if files else None
 
 
-def _load_qtable(level):
-    path = _find_model(os.path.join(config.MODELS_DIR, f"q_table_level{level}_ep*.pkl"))
+def _load_qtable(level, ep=None):
+    suffix = f"ep{ep}" if ep else "ep*"
+    path = _find_model(os.path.join(config.MODELS_DIR, f"q_table_level{level}_{suffix}.pkl"))
     if not path:
-        return None
+        return None, None
     agent = QTableAgent(n_actions=5)
     agent.load(path)
     agent.epsilon = 0.0
+    import re
+    m = re.search(r"_ep(\d+)", os.path.basename(path))
+    loaded_ep = int(m.group(1)) if m else ep
     print(f"  Q-Table geladen: {os.path.basename(path)}")
-    return agent
+    return agent, loaded_ep
 
 
-def _load_dqn(level):
-    path = _find_model(os.path.join(config.MODELS_DIR, f"dqn_level{level}_ep*.pt"))
+def _load_dqn(level, ep=None):
+    suffix = f"ep{ep}" if ep else "ep*"
+    path = _find_model(os.path.join(config.MODELS_DIR, f"dqn_level{level}_{suffix}.pt"))
     if not path:
-        return None
+        return None, None
     env_tmp = FootballEnv(level=level)
     agent = DQNAgent(state_size=env_tmp.get_state_size(), n_actions=5)
     agent.load(path)
     agent.epsilon = 0.0
+    import re
+    m = re.search(r"_ep(\d+)", os.path.basename(path))
+    loaded_ep = int(m.group(1)) if m else ep
     print(f"  DQN geladen:     {os.path.basename(path)}")
-    return agent
+    return agent, loaded_ep
 
 
 def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done=False):
@@ -237,6 +245,8 @@ def main():
                     help="Level (1/2/3); Standard: alle")
     ap.add_argument("--agent", choices=["qtable", "dqn", "both"], default="both",
                     help="Welchen Agenten animieren (Standard: beide)")
+    ap.add_argument("--episodes", type=int, default=None,
+                    help="Episodenzahl des zu ladenden Modells (Standard: neuestes)")
     ap.add_argument("--fps", type=int, default=3, help="Frames pro Sekunde (Standard: 3)")
     args = ap.parse_args()
 
@@ -247,21 +257,21 @@ def main():
     for lv in levels:
         print(f"\n=== Level {lv} ===")
         if do_qt:
-            agent = _load_qtable(lv)
+            agent, ep = _load_qtable(lv, ep=args.episodes)
             if agent:
                 frames = run_episode(lv, agent, is_dqn=False, label="Q-Table")
                 save_gif(frames,
-                         os.path.join(config.ANIMATIONS_DIR, f"animation_qtable_level{lv}.gif"),
+                         os.path.join(config.ANIMATIONS_DIR, f"animation_qtable_level{lv}_ep{ep}.gif"),
                          args.fps)
             else:
                 print(f"  Kein Q-Table-Modell für Level {lv} gefunden.")
 
         if do_dqn:
-            agent = _load_dqn(lv)
+            agent, ep = _load_dqn(lv, ep=args.episodes)
             if agent:
                 frames = run_episode(lv, agent, is_dqn=True, label="DQN")
                 save_gif(frames,
-                         os.path.join(config.ANIMATIONS_DIR, f"animation_dqn_level{lv}.gif"),
+                         os.path.join(config.ANIMATIONS_DIR, f"animation_dqn_level{lv}_ep{ep}.gif"),
                          args.fps)
             else:
                 print(f"  Kein DQN-Modell für Level {lv} gefunden.")
