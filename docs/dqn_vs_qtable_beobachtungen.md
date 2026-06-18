@@ -68,7 +68,7 @@ Erst dadurch entsteht die echte Entscheidung: langsam dribbeln oder schnell pass
 
 ## Problem 1 — DQN Level 1: Konvergiert nie (~48% Goal-Rate)
 
-### Beobachtung
+### Beobachtung (vor Optimierung, Branch a_dev_1)
 - DQN Level 1 schwankt über alle 1000 Episoden zwischen 33–54%.
 - Loss bleibt ab Episode 300 konstant bei ~1.0–1.2 — kein Lernfortschritt.
 - Epsilon erreicht Minimum (0.05) bei Episode ~600 — keine Verbesserung danach.
@@ -81,6 +81,10 @@ Level 1 hat einen extrem spärlichen Reward: nur der exakte Zustand
 Das neuronale Netz versucht diese scharfe Bedingung als glatte Funktion zu approximieren —
 was strukturell nicht funktioniert. Q-Table dagegen speichert den exakten Zustand direkt.
 
+Ein weiterer Faktor: Zone-Miss (Schuss in x≥8 aber falsche Reihe) gab Reward=0.
+Da 0 > -1 (Step-Penalty), lernte das Netz: "In der Zone schießen ist immer besser als
+nicht schießen" — unabhängig von der Reihe. Das erzeugte eine Falle bei ~50% Goal-Rate.
+
 Das ist ein bekanntes Versagen der Kombination aus:
 - Function Approximation (NN)
 - Bootstrapping (TD-Learning)
@@ -92,10 +96,49 @@ Das ist ein bekanntes Versagen der Kombination aus:
 Zeigt klar: DQN ist auf kleinen, strukturierten Zustandsräumen mit spärlichem Reward
 SCHLECHTER als Q-Table, nicht nur langsamer.
 
-### Mögliche Fixes
-- Zone-Reward stärken: +3 für Aufenthalt in Schusszone mit Ball
-- Learning Rate reduzieren (1e-5 statt 1e-4) für stabileres Lernen
-- Double DQN einsetzen (reduziert Overestimation Bias)
+---
+
+## Optimierung 1 — DQN Level 1: Reward Shaping + 2D Schusszone (18.06.2026)
+
+**Branch:** a_dev_4
+
+### Änderungen
+1. **2D Schusszone** (statt vertikaler Streifen):
+   - Alt: `agent_x >= 8` — ganzer rechter Streifen, inklusive Ecken weit vom Tor
+   - Neu: `agent_x >= 8 AND |agent_y - goal_y| <= 1` — nur Felder nahe dem Tor
+   - Realistische Schusszone: (8,2), (8,3), (8,4) und (9,2), (9,4)
+
+2. **Zone-Miss-Strafe** (`REWARD_SHOOT_ZONE_MISS = -3`):
+   - Schuss in Zone, aber falsche Reihe → `-3` statt `0`
+   - Bricht die falsche Lerndynamik: Schießen in der Zone ist nur bei y=3 sinnvoll
+
+3. **Reihen-Alignment-Shaping** (`REWARD_GOAL_ROW_ALIGN = +1`):
+   - Agent trägt Ball auf goal_y (Reihe 3) → zusätzlich `+1`
+   - Gibt dem Netz einen Gradienten zur richtigen Schussreihe, bevor die Zone erreicht wird
+   - Feuert nur auf Bewegungsaktionen, nicht auf Schuss
+
+### Ergebnis nach Optimierung (1000 Episoden)
+
+| Agent | Goal-Rate (letzten 100 Ep.) | Verhalten |
+|---|---|---|
+| Q-Table | **96%** (stabil ab ep~200) | Lernt schnell, bleibt stabil |
+| DQN | **~72–84%** (instabil) | Erreicht ~99% bei ep~200, fällt dann zurück |
+
+### Neue Beobachtung: Deadly Triad jetzt sichtbar
+DQN **findet** die Lösung jetzt tatsächlich (ep~200: kurzzeitig ~99%) — das war vorher
+nie der Fall. Aber die Policy ist nicht stabil: das Netz fällt danach auf ~73% zurück,
+erholt sich leicht, und pendelt am Ende um ~72%.
+
+Das ist die Deadly Triad in Reinform:
+- Network lernt eine gute Policy
+- Bootstrapping + Replay Buffer verursachen Drift, sobald sich die Datenverteilung ändert
+- Q-Table ist nach Konvergenz vollständig stabil — exakte Werte werden nicht überschrieben
+
+### Akademische Bedeutung (aktualisiert)
+Vorher war DQN L1 „kaputt" (lernte nie). Nach dem Reward Shaping ist das Verhalten
+**didaktisch wertvoller**: Man sieht klar den Unterschied zwischen
+tabular (einmal konvergiert → stabil) und neural (konvergiert → driftet).
+Der Plot zeigt zwei qualitativ verschiedene Konvergenzverläufe.
 
 ---
 
@@ -198,7 +241,7 @@ oder zusätzlicher Komplexität (zufällige Ball-Starts, mehrere Gegner) ausspie
 
 ## Offene Optimierungsaufgaben
 
-- [ ] DQN Level 1: Sparse Reward Problem lösen (Zone-Reward oder Architektur)
+- [x] DQN Level 1: Reward Shaping + 2D Schusszone implementiert (18.06.2026)
 - [ ] DQN Level 4: Langsameren Epsilon-Decay + mehr Episoden testen
 - [ ] DQN Level 4: Curriculum Learning (L3 → L4) evaluieren
 - [ ] Separate Hyperparameter-Sets pro Level (aktuell: alle Level gleiche Config)

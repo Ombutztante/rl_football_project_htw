@@ -9,9 +9,11 @@ LEVEL = 1
 MAX_STEPS = 300
 N_EPISODES = 1000
 
-# Shooting zone: columns from which a shoot is considered a "good position"
-# (agent_x >= SHOOT_ZONE_X). For a 10-wide grid this means x=8 or x=9.
+# Level 1 shooting zone: 2D box around the goal.
+# Valid shoot position: agent_x >= SHOOT_ZONE_X  AND  |agent_y - goal_y| <= SHOOT_ZONE_Y_RADIUS
+# On a 10×6 grid with goal at (9,3): zone cells are (8,2),(8,3),(8,4),(9,2),(9,4)
 SHOOT_ZONE_X = GRID_WIDTH - 2  # = 8
+SHOOT_ZONE_Y_RADIUS = 1        # rows around goal row that count as shooting zone
 
 # Ball starting x-column per level (y is always height // 2)
 # Level 1: centre — agent must navigate to ball, then reach shooting zone
@@ -28,9 +30,11 @@ REWARD_BALL_PICKUP = 5     # picking up the ball
 REWARD_CLOSER = 1          # moved closer to goal (shaping, movement actions)
 
 # Rewards — Level 1
-REWARD_GOAL = 30           # goal scored via shoot from zone
-REWARD_SHOOT_NO_BALL = -5  # shoot without ball
-REWARD_SHOOT_BAD_POS = -5  # shoot from outside shooting zone
+REWARD_GOAL = 30             # goal scored via shoot from zone (aligned with goal row)
+REWARD_SHOOT_NO_BALL = -5    # shoot without ball
+REWARD_SHOOT_BAD_POS = -5    # shoot from outside shooting zone
+REWARD_SHOOT_ZONE_MISS = -3  # shoot in zone but wrong row (off by 1 row)
+REWARD_GOAL_ROW_ALIGN = 1    # agent has ball and is on goal row (alignment shaping)
 
 # Rewards — Level 2
 SHOOT_RANGE = 3            # cells the ball travels on a forward pass

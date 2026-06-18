@@ -73,6 +73,7 @@ class FootballEnv:
         ball_x = raw_ball_x if raw_ball_x is not None else self.width // 2
         self._ball_start = (ball_x, self.height // 2)
 
+        self.shoot_zone_y_radius = config.SHOOT_ZONE_Y_RADIUS  # for L1 2D zone
         self.n_actions = 5
 
         self.obstacle_cells = frozenset(
@@ -108,9 +109,11 @@ class FootballEnv:
             -1   every step
             +5   ball picked up
             +1   moved closer to goal (shaping)
-            +30  goal scored via shoot from zone
+            +1   agent has ball and is on goal row (alignment shaping)
+            +30  goal scored via shoot from zone (aligned with goal row)
+            -3   shoot in zone but wrong row
             -5   shoot without ball
-            -5   shoot from outside shooting zone
+            -5   shoot outside shooting zone
 
         Level 2 reward structure:
             -1   every step
@@ -166,6 +169,10 @@ class FootballEnv:
             if self._dist_to_goal() < prev_dist:
                 reward += config.REWARD_CLOSER  # +1
 
+            # Level 1: reward for carrying ball on the goal row
+            if self.level == 1 and self.has_ball and self.agent_pos[1] == self.goal_pos[1]:
+                reward += config.REWARD_GOAL_ROW_ALIGN  # +1
+
             # Level 2+: agent dribbles ball into goal cell → score
             if self.level >= 2 and self.has_ball and self.agent_pos == list(self.goal_pos):
                 if self.level >= 4:
@@ -211,9 +218,11 @@ class FootballEnv:
         grid = [["." for _ in range(self.width)] for _ in range(self.height)]
 
         if self.level == 1:
+            _, gy = self.goal_pos
             for y in range(self.height):
-                for x in range(self.shoot_zone_x, self.width - 1):
-                    grid[y][x] = ","
+                if abs(y - gy) <= self.shoot_zone_y_radius:
+                    for x in range(self.shoot_zone_x, self.width - 1):
+                        grid[y][x] = ","
 
         if self.level >= 4:
             for (ox, oy) in sorted(self.obstacle_cells):
@@ -258,19 +267,21 @@ class FootballEnv:
 
     def _shoot_l1(self):
         """
-        Level 1 shoot: zone-based goal attempt.
-            No ball       → -5
-            Outside zone  → -5, ball dropped
-            In zone, aligned with goal row  → +30, episode ends
-            In zone, wrong row              → miss, ball to right wall, no penalty
+        Level 1 shoot: 2D zone-based goal attempt.
+            Zone: agent_x >= SHOOT_ZONE_X  AND  |agent_y - goal_y| <= SHOOT_ZONE_Y_RADIUS
+            No ball              → -5
+            Outside zone         → -5, ball dropped
+            In zone, goal row    → +30, episode ends
+            In zone, wrong row   → -3, ball to right wall
         """
         if not self.has_ball:
             return config.REWARD_SHOOT_NO_BALL  # -5
 
         ax, ay = self.agent_pos
         _, gy = self.goal_pos
+        in_zone = ax >= self.shoot_zone_x and abs(ay - gy) <= self.shoot_zone_y_radius
 
-        if ax < self.shoot_zone_x:
+        if not in_zone:
             self.has_ball = False
             return config.REWARD_SHOOT_BAD_POS  # -5
 
@@ -281,10 +292,10 @@ class FootballEnv:
             self.done = True
             return config.REWARD_GOAL  # +30
         else:
-            # Miss — ball rolls to right wall, same row
+            # In zone but wrong row — penalised miss
             self.ball_pos = [self.width - 1, ay]
             self.has_ball = False
-            return 0
+            return config.REWARD_SHOOT_ZONE_MISS  # -3
 
     def _shoot_forward_pass(self):
         """
