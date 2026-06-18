@@ -94,6 +94,7 @@ class FootballEnv:
         self.has_ball = False
         self.done = False
         self.step_count = 0
+        self.ball_pickup_rewarded = False  # ensures pickup reward fires only once per episode
 
         if self.level >= 3:
             opp_x = self.goal_pos[0] - config.OPP_START_X_FROM_GOAL
@@ -165,10 +166,12 @@ class FootballEnv:
             if self.has_ball:
                 self.ball_pos = self.agent_pos.copy()
 
-            # Ball pickup
+            # Ball pickup — reward fires only once per episode to prevent shoot→pickup farming
             if not self.has_ball and self.agent_pos == self.ball_pos:
                 self.has_ball = True
-                reward += config.REWARD_BALL_PICKUP  # +5
+                if not self.ball_pickup_rewarded:
+                    reward += config.REWARD_BALL_PICKUP  # +5
+                    self.ball_pickup_rewarded = True
 
             # Shaping: reward progress toward goal
             if self._dist_to_goal() < prev_dist:
