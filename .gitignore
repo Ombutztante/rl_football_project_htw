@@ -2,3 +2,10 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Animations are regeneratable and too large for git
+results/animations/
+
+# Model snapshots are only needed for training animations — regeneratable
+results/models/*_snapshots.pkl
+results/models/*_snapshots.pt
