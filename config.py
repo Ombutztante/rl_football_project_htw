@@ -56,9 +56,15 @@ OBSTACLE_Y_START = 0  # first blocked row (0 = top)
 OBSTACLE_HEIGHT  = 4  # number of blocked rows
 
 # Rewards — Level 4 (extends Level 3 + obstacle)
-REWARD_GOAL_L4      = 60  # goal scored (harder than L3, so higher reward)
-REWARD_HIT_OBSTACLE = -2  # agent walks into obstacle wall
-REWARD_SHOT_BLOCKED = -5  # shot intercepted by obstacle
+REWARD_GOAL_L4         = 60  # goal scored (harder than L3, so higher reward)
+REWARD_HIT_OBSTACLE    = -2  # agent walks into obstacle wall
+REWARD_SHOT_BLOCKED    = -5  # shot intercepted by obstacle
+REWARD_BYPASS_OBSTACLE =  2  # agent carries ball through free corridor (y >= OBSTACLE_HEIGHT) past obstacle
+
+# DQN Level 4 — slower epsilon decay so the agent explores long enough to find the detour
+# With decay=0.995 epsilon reaches 0.05 at ~ep600, too early for a multi-step obstacle bypass.
+# With decay=0.998 epsilon reaches 0.05 at ~ep1800, giving enough exploration on 2000 episodes.
+DQN_EPSILON_DECAY_L4 = 0.998
 
 # Level 3 opponent
 # Opponent starts at x = (GRID_WIDTH - 1) - OPP_START_X_FROM_GOAL, y = 0 (top row)

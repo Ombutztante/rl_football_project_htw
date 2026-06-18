@@ -163,7 +163,7 @@ Q-Table hat dieses Problem nicht — einmal konvergiert, bleibt die Policy stabi
 
 ## Problem 3 — DQN Level 4: Kompletter Ausfall (0% über 1000 Episoden)
 
-### Beobachtung
+### Beobachtung (vor Optimierung, Branch a_dev_1)
 - DQN erzielt in keiner der 1000 Episoden ein Tor.
 - Loss bleibt niedrig (~0.45 bei ep300–500), steigt danach leicht.
 - Q-Table erreicht 90% Goal-Rate (bei nur 0.3% Zustandsraumabdeckung!).
@@ -194,12 +194,65 @@ Es lernt NICHT: "Nach unten gehen und dann weiterdribbeln."
 Q-Table funktioniert hier weil es nur die ~1.300 tatsächlich besuchten States braucht —
 und durch Zufall findet es in frühen Episoden den Umweg-Pfad, der dann direkt gespeichert wird.
 
-### Mögliche Fixes
-- Langsamerer Epsilon-Decay: 0.998 statt 0.995 (Minimum erst bei ~1.600 Episoden)
-- Mehr Episoden: 2.000–3.000 für DQN L4
-- Reward-Shaping: +1 für Erreichen von Reihe ≥ 4 wenn x ≥ 5 (Umweg-Incentive)
-- Stärkere Obstacle-Penalty: -5 statt -2 für klareres Signal
-- Curriculum Learning: DQN erst auf L3 vortrainieren, dann auf L4 finetunen
+---
+
+## Optimierung 2 — DQN Level 4: Langsamerer Epsilon-Decay + mehr Episoden (18.06.2026)
+
+**Branch:** a_dev_4
+
+### Versuchte Änderungen
+
+**Versuch A: Corridor-Shaping (verworfen)**
+
+Zuerst wurde ein `REWARD_BYPASS_OBSTACLE=+2` implementiert, der bei jedem Schritt feuert,
+wenn der Agent mit Ball in der Zone x≥6 UND y≥4 (freier Korridor unter dem Hindernis) ist.
+
+Ergebnis: **Farming-Loop** entstanden. Der Agent lernte, im Korridor hin- und herzulaufen
+und dabei +2-1=-1... Nein: -1 (step) +2 (bypass) = +1 netto **pro Schritt**.
+Das ist besser als das Tor zu suchen (höheres Risiko durch Opponent).
+→ Q-Table fiel von 90% auf 16%. Reward entfernt.
+
+**Versuch B: Langsamerer Epsilon-Decay allein**
+
+- `DQN_EPSILON_DECAY_L4 = 0.998` (statt 0.995)
+- Epsilon erreicht Minimum erst bei ~ep1800 statt ~ep600
+- 2000 Episoden statt 1000
+
+### Ergebnis (2000 Episoden, epsilon_decay=0.998)
+
+| Agent | Goal-Rate | Verhalten |
+|---|---|---|
+| Q-Table | **93%** (stabil ab ep~700) | Lernt Umweg sicher |
+| DQN | **~0%** | Reward steigt leicht, aber kein Tor |
+
+DQN bleibt über alle 2000 Episoden bei ~0% Torrate. Avg-Reward steigt zwar von -22 (ep500)
+auf +3.6 (ep2000) — das Netz lernt also *etwas* (Obstacle-Kollisionen reduzieren) —
+aber nie die vollständige Detour-Policy.
+
+### Ursache (endgültig)
+Der langsamere Epsilon-Decay allein reicht nicht. Das fundamentale Problem ist:
+
+1. **Mehrstufiger räumlicher Plan erforderlich**: Der Agent muss Ball holen →
+   nach unten navigieren → Korridor durchqueren → zurück auf Goal-Row → Tor.
+   Jeder Schritt ist nur sinnvoll im Kontext der gesamten Sequenz — der Reward
+   für "nach unten gehen" ist null (REWARD_CLOSER feuert NICHT, weil Distanz zum Tor wächst).
+
+2. **Credit Assignment versagt**: Der Reward +60 am Ende der 12-Schritt-Sequenz
+   muss durch Bootstrapping (TD-Learning) über ~12 Schritte zurückpropagiert werden.
+   Die Q-Werte für frühe Schritte (z.B. "geh nach unten bei x=5") bleiben instabil.
+
+3. **Q-Table hat dieses Problem nicht**: Es speichert den exakten Q-Wert für
+   (5,3,5,3,1,opp_x,opp_y, action=down) direkt. Nach wenigen erfolgreichen Episoden
+   konvergiert der Wert. Das neuronale Netz muss diesen Wert als Funktion aller
+   anderen States approximieren — und überschreibt ihn regelmäßig.
+
+### Akademische Bedeutung (endgültig)
+DQN Level 4 = **vollständiges Versagen bei strukturierter Mehrstufen-Navigation**.
+Dies ist kein Hyperparameter-Problem — es ist ein strukturelles Versagen der
+Function Approximation + Bootstrapping Kombination auf kleinen, exakt strukturierten Grids.
+
+Der Vergleichsplot Level 4 zeigt das akademisch klarste Ergebnis des Projekts:
+Q-Table 95% stabil vs. DQN flach bei 0% über 2000 Episoden.
 
 ---
 
@@ -242,8 +295,8 @@ oder zusätzlicher Komplexität (zufällige Ball-Starts, mehrere Gegner) ausspie
 ## Offene Optimierungsaufgaben
 
 - [x] DQN Level 1: Reward Shaping + 2D Schusszone implementiert (18.06.2026)
-- [ ] DQN Level 4: Langsameren Epsilon-Decay + mehr Episoden testen
-- [ ] DQN Level 4: Curriculum Learning (L3 → L4) evaluieren
+- [x] DQN Level 4: Langsameren Epsilon-Decay + mehr Episoden getestet → 0%, strukturelles Versagen (18.06.2026)
+- [ ] DQN Level 4: Curriculum Learning (L3 → L4) evaluieren (optional)
 - [ ] Separate Hyperparameter-Sets pro Level (aktuell: alle Level gleiche Config)
 - [ ] Double DQN implementieren (reduziert Overestimation Bias)
 - [ ] Level 5 oder größeres Grid für DQN-Vorteil-Demonstration

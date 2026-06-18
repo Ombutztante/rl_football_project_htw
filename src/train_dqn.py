@@ -13,9 +13,16 @@ from src.dqn_agent import DQNAgent
 
 def train(n_snapshots=10):
     env = FootballEnv(level=config.LEVEL)
+    # Level 4 uses a slower epsilon decay to allow enough exploration for the obstacle detour
+    epsilon_decay = (
+        config.DQN_EPSILON_DECAY_L4
+        if config.LEVEL >= 4 and hasattr(config, "DQN_EPSILON_DECAY_L4")
+        else None
+    )
     agent = DQNAgent(
         state_size=env.get_state_size(),
         n_actions=env.n_actions,
+        epsilon_decay=epsilon_decay,
     )
 
     os.makedirs(config.MODELS_DIR, exist_ok=True)
@@ -120,10 +127,14 @@ def train(n_snapshots=10):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--level", type=int, default=None,
-                    help="Überschreibt config.LEVEL (1, 2 oder 3)")
+                    help="Überschreibt config.LEVEL (1, 2, 3 oder 4)")
+    ap.add_argument("--episodes", type=int, default=None,
+                    help="Überschreibt config.N_EPISODES")
     ap.add_argument("--n-snapshots", type=int, default=10,
                     help="Anzahl der Zwischenstände für animate_training.py (Standard: 10)")
     args = ap.parse_args()
     if args.level is not None:
         config.LEVEL = args.level
+    if args.episodes is not None:
+        config.N_EPISODES = args.episodes
     train(n_snapshots=args.n_snapshots)

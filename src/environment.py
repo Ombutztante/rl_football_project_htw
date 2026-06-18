@@ -134,6 +134,11 @@ class FootballEnv:
             -5   shoot without ball
             -10  opponent reaches loose ball (episode ends)
             -20  opponent tackles agent carrying ball (episode ends)
+
+        Level 4 adds on top of Level 3:
+            -2   agent walks into obstacle wall
+            -5   forward pass blocked by obstacle
+            +60  goal scored
         """
         if self.done:
             raise RuntimeError("Episode is done. Call reset() first.")
