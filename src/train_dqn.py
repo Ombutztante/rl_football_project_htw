@@ -108,7 +108,9 @@ def train(n_snapshots=10):
             )
 
     import torch
-    stem = f"dqn_level{config.LEVEL}_ep{config.N_EPISODES}"
+    from datetime import date as _date
+    date_tag = _date.today().strftime("%Y%m%d")
+    stem = f"dqn_level{config.LEVEL}_ep{config.N_EPISODES}_{date_tag}"
     model_path = os.path.join(config.MODELS_DIR, f"{stem}.pt")
     log_path   = os.path.join(config.LOGS_DIR,   f"{stem}.json")
     snap_path  = os.path.join(config.MODELS_DIR, f"{stem}_snapshots.pt")
