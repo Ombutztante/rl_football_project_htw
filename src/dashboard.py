@@ -45,6 +45,8 @@ C = {
     "pball":     "#CE93D8",
     "ball":      "#FF8A65",
     "opp":       "#EF5350",
+    "teammate":  "#81C784",
+    "tm_pball":  "#A5D6A7",
     "border":    "#2A3A6A",
     "goal_edge": "#66BB6A",
     "text":      "#ECF0F1",
@@ -160,7 +162,8 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
                 fontsize=7.5, color="#856404",
                 bbox=dict(fc=C["zone"], ec="#FFC107", boxstyle="round,pad=0.25", lw=0.8))
 
-    if not env.has_ball:
+    tm_has_ball = getattr(env, 'tm_has_ball', False)
+    if not env.has_ball and not tm_has_ball:
         bx, by = env.ball_pos
         if 0 <= bx < W and 0 <= by < H:
             bdy = H - 1 - by
@@ -178,6 +181,19 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
                 facecolor=C["opp"], edgecolor="#7B0000", linewidth=1.8, zorder=4))
             ax.text(ox + 0.5, ody + 0.5, "X", ha="center", va="center",
                     fontsize=13, fontweight="bold", color="white", zorder=5)
+
+    if env.level == 5:
+        tx, ty = env.tm_pos
+        if 0 <= tx < W and 0 <= ty < H:
+            tdy = H - 1 - ty
+            fc_tm = C["tm_pball"] if tm_has_ball else C["teammate"]
+            ax.add_patch(FancyBboxPatch(
+                (tx + 0.12, tdy + 0.12), 0.76, 0.76,
+                boxstyle="round,pad=0.04",
+                facecolor=fc_tm, edgecolor="#1B5E20", linewidth=1.8, zorder=4))
+            ax.text(tx + 0.5, tdy + 0.5, "M" if tm_has_ball else "T",
+                    ha="center", va="center", fontsize=13, fontweight="bold",
+                    color="white", zorder=5)
 
     ax_x, ax_y = env.agent_pos
     ady = H - 1 - ax_y
@@ -212,9 +228,12 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
         handles.append(mpatches.Patch(facecolor=C["zone"], label="Schusszone"))
     if env.level >= 3:
         handles.append(mpatches.Patch(facecolor=C["opp"], label="Gegner (X)"))
-    if env.level >= 4:
+    if env.level == 4:
         handles.append(mpatches.Patch(facecolor=C["obstacle"], edgecolor="#555555",
                                       label="Hindernis (#)"))
+    if env.level == 5:
+        handles.append(mpatches.Patch(facecolor=C["teammate"], label="Mitspieler (T)"))
+        handles.append(mpatches.Patch(facecolor=C["tm_pball"], label="Mitspieler+Ball (M)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=3,
               framealpha=0.92, edgecolor=C["border"], facecolor=C["cell"])
 
@@ -355,7 +374,7 @@ class State:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4], default=1)
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5], default=1)
     ap.add_argument("--agent", choices=["qtable", "dqn"], default="qtable")
     args = ap.parse_args()
 
@@ -369,15 +388,15 @@ def main():
                  color=C["text"], y=0.995)
 
     # ── Sidebar: Level (RadioButtons, immer sichtbar) ─────────────────────
-    ax_lv = fig.add_axes([0.01, 0.53, 0.12, 0.38], facecolor=C["cell"])
+    ax_lv = fig.add_axes([0.01, 0.47, 0.12, 0.46], facecolor=C["cell"])
     ax_lv.set_title("Level", fontsize=9, pad=4, color=C["text"])
-    radio_lv = RadioButtons(ax_lv, ("Level 1", "Level 2", "Level 3", "Level 4"),
+    radio_lv = RadioButtons(ax_lv, ("Level 1", "Level 2", "Level 3", "Level 4", "Level 5"),
                             active=s.level - 1, activecolor=C["agent"])
     for lb in radio_lv.labels:
         lb.set_color(C["text"]); lb.set_fontsize(9)
 
     # ── Sidebar: Kontext-Titel ─────────────────────────────────────────────
-    ax_ctx_lbl = fig.add_axes([0.01, 0.47, 0.12, 0.04])
+    ax_ctx_lbl = fig.add_axes([0.01, 0.41, 0.12, 0.04])
     ax_ctx_lbl.axis("off")
     ax_ctx_lbl.set_facecolor(C["bg"])
     ctx_title = ax_ctx_lbl.text(0.5, 0.5, "Agent", ha="center", va="center",
@@ -385,7 +404,7 @@ def main():
                                 transform=ax_ctx_lbl.transAxes)
 
     # ── Sidebar: 4 Kontext-Buttons (Agent oder Plot-Typ) ──────────────────
-    CTX_Y = [0.37, 0.28, 0.19, 0.10]
+    CTX_Y = [0.31, 0.22, 0.13, 0.04]
     ctx_axes = []
     ctx_btns = []
     for y in CTX_Y:

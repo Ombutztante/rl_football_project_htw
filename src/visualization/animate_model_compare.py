@@ -43,6 +43,8 @@ C = {
     "pball_dqn": "#E1BEE7",
     "ball":      "#FF8A65",
     "opp":       "#EF5350",
+    "teammate":  "#81C784",
+    "tm_pball":  "#A5D6A7",
     "border":    "#2A3A6A",
     "goal_edge": "#66BB6A",
     "text":      "#ECF0F1",
@@ -134,7 +136,8 @@ def _draw_grid(ax, env, label, action, total_reward, done,
                 bbox=dict(fc=C["zone"], ec="#FFD54F",
                           boxstyle="round,pad=0.2", lw=0.7))
 
-    if not env.has_ball:
+    tm_has_ball = getattr(env, 'tm_has_ball', False)
+    if not env.has_ball and not tm_has_ball:
         bx, by = env.ball_pos
         if 0 <= bx < W and 0 <= by < H:
             bdy = H - 1 - by
@@ -154,6 +157,20 @@ def _draw_grid(ax, env, label, action, total_reward, done,
                 facecolor=C["opp"], edgecolor="#B71C1C", linewidth=1.5, zorder=4,
             ))
             ax.text(ox + 0.5, ody + 0.5, "X",
+                    ha="center", va="center", fontsize=12, fontweight="bold",
+                    color="white", zorder=5)
+
+    if env.level == 5:
+        tx, ty = env.tm_pos
+        if 0 <= tx < W and 0 <= ty < H:
+            tdy = H - 1 - ty
+            fc_tm = C["tm_pball"] if tm_has_ball else C["teammate"]
+            ax.add_patch(FancyBboxPatch(
+                (tx + 0.12, tdy + 0.12), 0.76, 0.76,
+                boxstyle="round,pad=0.04",
+                facecolor=fc_tm, edgecolor="#1B5E20", linewidth=1.5, zorder=4,
+            ))
+            ax.text(tx + 0.5, tdy + 0.5, "M" if tm_has_ball else "T",
                     ha="center", va="center", fontsize=12, fontweight="bold",
                     color="white", zorder=5)
 
@@ -219,7 +236,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="Vergleichs-GIF: Q-Table vs. DQN nebeneinander"
     )
-    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4], default=3)
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5], default=3)
     ap.add_argument("--fps",   type=int, default=3)
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--episodes", type=int, default=None,
