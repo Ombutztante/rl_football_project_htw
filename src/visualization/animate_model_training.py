@@ -46,6 +46,8 @@ C = {
     "pball":     "#CE93D8",
     "ball":      "#FF8A65",
     "opp":       "#EF5350",
+    "teammate":  "#81C784",
+    "tm_pball":  "#A5D6A7",
     "border":    "#2A3A6A",
     "goal_edge": "#66BB6A",
     "text":      "#ECF0F1",
@@ -164,7 +166,7 @@ def _render_game_frame(env, action=None, step_reward=0, total_reward=0,
         for col in range(W):
             is_goal = (col == gx and row == gy)
             is_zone = (env.level == 1 and env.shoot_zone_x <= col < W - 1)
-            is_obstacle = (env.level >= 4 and (col, row) in env.obstacle_cells)
+            is_obstacle = (env.level == 4 and (col, row) in env.obstacle_cells)
             fc = C["goal"] if is_goal else (C["obstacle"] if is_obstacle else (C["zone"] if is_zone else C["cell"]))
             ec = C["goal_edge"] if is_goal else ("#555555" if is_obstacle else C["border"])
             lw = 2.2 if is_goal else (1.5 if is_obstacle else 0.9)
@@ -188,7 +190,8 @@ def _render_game_frame(env, action=None, step_reward=0, total_reward=0,
                 ha="center", va="center", fontsize=7, color="#856404",
                 bbox=dict(fc=C["zone"], ec="#FFC107", boxstyle="round,pad=0.25", lw=0.8))
 
-    if not env.has_ball:
+    tm_has_ball = getattr(env, 'tm_has_ball', False)
+    if not env.has_ball and not tm_has_ball:
         bx, by = env.ball_pos
         if 0 <= bx < W and 0 <= by < H:
             bdy = H - 1 - by
@@ -207,6 +210,20 @@ def _render_game_frame(env, action=None, step_reward=0, total_reward=0,
                 facecolor=C["opp"], edgecolor="#7B0000", linewidth=1.8, zorder=4,
             ))
             ax.text(ox + 0.5, ody + 0.5, "X",
+                    ha="center", va="center", fontsize=13, fontweight="bold",
+                    color="white", zorder=5)
+
+    if env.level == 5:
+        tx, ty = env.tm_pos
+        if 0 <= tx < W and 0 <= ty < H:
+            tdy = H - 1 - ty
+            fc_tm = C["tm_pball"] if tm_has_ball else C["teammate"]
+            ax.add_patch(FancyBboxPatch(
+                (tx + 0.12, tdy + 0.12), 0.76, 0.76,
+                boxstyle="round,pad=0.04",
+                facecolor=fc_tm, edgecolor="#1B5E20", linewidth=1.8, zorder=4,
+            ))
+            ax.text(tx + 0.5, tdy + 0.5, "M" if tm_has_ball else "T",
                     ha="center", va="center", fontsize=13, fontweight="bold",
                     color="white", zorder=5)
 
@@ -247,8 +264,11 @@ def _render_game_frame(env, action=None, step_reward=0, total_reward=0,
         handles.append(mpatches.Patch(facecolor=C["zone"], label="Schusszone"))
     if env.level >= 3:
         handles.append(mpatches.Patch(facecolor=C["opp"], label="Gegner (X)"))
-    if env.level >= 4:
+    if env.level == 4:
         handles.append(mpatches.Patch(facecolor=C["obstacle"], edgecolor="#555555", label="Hindernis (#)"))
+    if env.level == 5:
+        handles.append(mpatches.Patch(facecolor=C["teammate"], label="Mitspieler (T)"))
+        handles.append(mpatches.Patch(facecolor=C["tm_pball"], label="Mitspieler+Ball (M)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=len(handles),
               bbox_to_anchor=(0.5, -0.12), framealpha=0.92, edgecolor=C["border"])
 
@@ -497,7 +517,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="Trainingsevolution eines vorhandenen Modells als GIF"
     )
-    ap.add_argument("--level",     type=int, choices=[1, 2, 3, 4], default=1)
+    ap.add_argument("--level",     type=int, choices=[1, 2, 3, 4, 5], default=1)
     ap.add_argument("--agent",     choices=["qtable", "dqn"], default="qtable")
     ap.add_argument("--episodes",  type=int, default=None,
                     help="Episodenzahl des zu ladenden Snapshots (Standard: neuestes)")
