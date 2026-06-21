@@ -147,7 +147,7 @@ def _draw_grid(ax, env, label, action, total_reward, done,
                     ha="center", va="center", fontsize=10, fontweight="bold",
                     color="white", zorder=5)
 
-    if env.level >= 3:
+    if env.level >= 3 and env.level != 6:
         ox, oy = env.opp_pos
         if 0 <= ox < W and 0 <= oy < H:
             ody = H - 1 - oy
@@ -160,7 +160,23 @@ def _draw_grid(ax, env, label, action, total_reward, done,
                     ha="center", va="center", fontsize=12, fontweight="bold",
                     color="white", zorder=5)
 
-    if env.level == 5:
+    if env.level == 6:
+        for opos, lbl, fc, edge in [
+                (env.opp1_pos, "X", C["opp"],   "#B71C1C"),
+                (env.opp2_pos, "Y", "#9C27B0", "#4A0070")]:
+            ox, oy = opos
+            if 0 <= ox < W and 0 <= oy < H:
+                ody = H - 1 - oy
+                ax.add_patch(FancyBboxPatch(
+                    (ox + 0.12, ody + 0.12), 0.76, 0.76,
+                    boxstyle="round,pad=0.04",
+                    facecolor=fc, edgecolor=edge, linewidth=1.5, zorder=4,
+                ))
+                ax.text(ox + 0.5, ody + 0.5, lbl,
+                        ha="center", va="center", fontsize=12, fontweight="bold",
+                        color="white", zorder=5)
+
+    if env.level in (5, 6):
         tx, ty = env.tm_pos
         if 0 <= tx < W and 0 <= ty < H:
             tdy = H - 1 - ty
@@ -236,7 +252,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="Vergleichs-GIF: Q-Table vs. DQN nebeneinander"
     )
-    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5], default=3)
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5, 6], default=3)
     ap.add_argument("--fps",   type=int, default=3)
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--episodes", type=int, default=None,

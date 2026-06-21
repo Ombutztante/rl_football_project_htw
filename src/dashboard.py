@@ -171,7 +171,7 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
             ax.text(bx + 0.5, bdy + 0.5, "B", ha="center", va="center",
                     fontsize=10, fontweight="bold", color="white", zorder=5)
 
-    if env.level >= 3:
+    if env.level >= 3 and env.level != 6:
         ox, oy = env.opp_pos
         if 0 <= ox < W and 0 <= oy < H:
             ody = H - 1 - oy
@@ -182,7 +182,22 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
             ax.text(ox + 0.5, ody + 0.5, "X", ha="center", va="center",
                     fontsize=13, fontweight="bold", color="white", zorder=5)
 
-    if env.level == 5:
+    if env.level == 6:
+        for opos, label_char, edge in [
+                (env.opp1_pos, "X", "#7B0000"),
+                (env.opp2_pos, "Y", "#4A0070")]:
+            ox, oy = opos
+            if 0 <= ox < W and 0 <= oy < H:
+                ody = H - 1 - oy
+                fc = C["opp"] if label_char == "X" else "#9C27B0"
+                ax.add_patch(FancyBboxPatch(
+                    (ox + 0.12, ody + 0.12), 0.76, 0.76,
+                    boxstyle="round,pad=0.04",
+                    facecolor=fc, edgecolor=edge, linewidth=1.8, zorder=4))
+                ax.text(ox + 0.5, ody + 0.5, label_char, ha="center", va="center",
+                        fontsize=13, fontweight="bold", color="white", zorder=5)
+
+    if env.level in (5, 6):
         tx, ty = env.tm_pos
         if 0 <= tx < W and 0 <= ty < H:
             tdy = H - 1 - ty
@@ -226,14 +241,17 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
     ]
     if env.level == 1:
         handles.append(mpatches.Patch(facecolor=C["zone"], label="Schusszone"))
-    if env.level >= 3:
+    if env.level >= 3 and env.level != 6:
         handles.append(mpatches.Patch(facecolor=C["opp"], label="Gegner (X)"))
     if env.level == 4:
         handles.append(mpatches.Patch(facecolor=C["obstacle"], edgecolor="#555555",
                                       label="Hindernis (#)"))
-    if env.level == 5:
+    if env.level in (5, 6):
         handles.append(mpatches.Patch(facecolor=C["teammate"], label="Mitspieler (T)"))
         handles.append(mpatches.Patch(facecolor=C["tm_pball"], label="Mitspieler+Ball (M)"))
+    if env.level == 6:
+        handles.append(mpatches.Patch(facecolor=C["opp"],  label="Gegner 1 – Ball (X)"))
+        handles.append(mpatches.Patch(facecolor="#9C27B0", label="Gegner 2 – Press (Y)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=3,
               framealpha=0.92, edgecolor=C["border"], facecolor=C["cell"])
 
@@ -374,7 +392,7 @@ class State:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5], default=1)
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5, 6], default=1)
     ap.add_argument("--agent", choices=["qtable", "dqn"], default="qtable")
     args = ap.parse_args()
 
@@ -388,9 +406,9 @@ def main():
                  color=C["text"], y=0.995)
 
     # ── Sidebar: Level (RadioButtons, immer sichtbar) ─────────────────────
-    ax_lv = fig.add_axes([0.01, 0.47, 0.12, 0.46], facecolor=C["cell"])
+    ax_lv = fig.add_axes([0.01, 0.44, 0.12, 0.49], facecolor=C["cell"])
     ax_lv.set_title("Level", fontsize=9, pad=4, color=C["text"])
-    radio_lv = RadioButtons(ax_lv, ("Level 1", "Level 2", "Level 3", "Level 4", "Level 5"),
+    radio_lv = RadioButtons(ax_lv, ("Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"),
                             active=s.level - 1, activecolor=C["agent"])
     for lb in radio_lv.labels:
         lb.set_color(C["text"]); lb.set_fontsize(9)
