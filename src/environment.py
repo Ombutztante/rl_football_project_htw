@@ -54,6 +54,9 @@ class FootballEnv:
     State (Level 3+4):  tuple (ax, ay, bx, by, has_ball, opp_x, opp_y)             — 7 elements
     State (Level 5):    tuple (ax, ay, bx, by, has_ball, opp_x, opp_y,
                                tm_x, tm_y, tm_has_ball)                             — 10 elements
+    State (Level 6/X):  tuple (ax, ay, bx, by, has_ball,
+                               opp1_x, opp1_y, opp2_x, opp2_y,
+                               tm_x, tm_y, tm_has_ball)                            — 12 elements
     Actions: 0=up  1=down  2=left  3=right  4=shoot/pass  (always 5)
     Returns: reset() -> state
              step(action) -> (next_state, reward, done)
@@ -79,6 +82,7 @@ class FootballEnv:
             3: config.BALL_START_X_L3,
             4: config.BALL_START_X_L4,
             5: config.BALL_START_X_L5,
+            6: config.BALL_START_X_LX,
         }
         raw_ball_x = _ball_x_cfg.get(self.level)
         ball_x = raw_ball_x if raw_ball_x is not None else self.width // 2
@@ -115,6 +119,14 @@ class FootballEnv:
             self.tm_has_ball = False
             self._ball_in_flight = False
             self._pass_target = None
+
+        if self.level == 6:
+            self.opp1_pos = [config.OPP1_START_X_LX, config.OPP1_START_Y_LX]
+            self.opp2_pos = [config.OPP2_START_X_LX, config.OPP2_START_Y_LX]
+            self.tm_pos   = [config.TM_START_X_LX,   config.TM_START_Y_LX]
+            self.tm_has_ball = False
+            self._ball_in_flight = False
+            self._pass_target    = None
 
         return self._get_state()
 
@@ -203,8 +215,16 @@ class FootballEnv:
         if self.level == 5 and not self.done:
             reward += self._move_teammate()
 
-        # Level 3+: opponent moves and may end the episode
-        if self.level >= 3 and not self.done:
+        # Level 6: advance ball in flight, then teammate moves, then both opponents
+        if self.level == 6 and not self.done:
+            self._advance_ball()
+        if self.level == 6 and not self.done:
+            reward += self._move_teammate_lx()
+        if self.level == 6 and not self.done:
+            reward += self._move_and_check_opponents_lx()
+
+        # Level 3–5: single opponent moves and may end the episode
+        if self.level >= 3 and self.level != 6 and not self.done:
             reward += self._move_and_check_opponent()
 
         if self.step_count >= self.max_steps:
@@ -227,13 +247,19 @@ class FootballEnv:
         ax, ay, bx, by, has_ball = state[0], state[1], state[2], state[3], state[4]
         arr = [ax / W, ay / H, bx / W, by / H, float(has_ball), gx / W, gy / H]
         if self.level >= 3:
-            arr += [state[5] / W, state[6] / H]
+            arr += [state[5] / W, state[6] / H]  # opp_x, opp_y (or opp1 for L6)
         if self.level == 5:
             arr += [state[7] / W, state[8] / H, float(state[9])]
+        if self.level == 6:
+            # state[5,6]=opp1 already added above; add opp2 + teammate
+            arr += [state[7] / W, state[8] / H,
+                    state[9] / W, state[10] / H, float(state[11])]
         return np.array(arr, dtype=np.float32)
 
     def get_state_size(self):
         """Return the length of the array produced by state_to_array()."""
+        if self.level == 6:
+            return 14  # 5 + 2(goal) + 2(opp1) + 2(opp2) + 3(tm)
         if self.level == 5:
             return 12
         return 9 if self.level >= 3 else 7
@@ -260,12 +286,18 @@ class FootballEnv:
             if 0 <= bx < self.width and 0 <= by < self.height:
                 grid[by][bx] = "B"
 
-        if self.level >= 3:
+        if self.level >= 3 and self.level != 6:
             ox, oy = self.opp_pos
             if 0 <= ox < self.width and 0 <= oy < self.height:
                 grid[oy][ox] = "X"
 
-        if self.level == 5:
+        if self.level == 6:
+            for opos, label in [(self.opp1_pos, "X"), (self.opp2_pos, "Y")]:
+                ox, oy = opos
+                if 0 <= ox < self.width and 0 <= oy < self.height:
+                    grid[oy][ox] = label
+
+        if self.level in (5, 6):
             tx, ty = self.tm_pos
             if 0 <= tx < self.width and 0 <= ty < self.height:
                 grid[ty][tx] = "M" if self.tm_has_ball else "T"
@@ -278,9 +310,11 @@ class FootballEnv:
         for row in grid:
             print(" ".join(row))
         info = f"Agent={tuple(self.agent_pos)}  Ball={tuple(self.ball_pos)}  Goal={self.goal_pos}"
-        if self.level >= 3:
+        if self.level >= 3 and self.level != 6:
             info += f"  Opp={tuple(self.opp_pos)}"
-        if self.level == 5:
+        if self.level == 6:
+            info += f"  Opp1={tuple(self.opp1_pos)}  Opp2={tuple(self.opp2_pos)}"
+        if self.level in (5, 6):
             info += f"  TM={tuple(self.tm_pos)}  TM_ball={self.tm_has_ball}"
         print(info)
 
@@ -294,6 +328,8 @@ class FootballEnv:
             return self._shoot_l1()
         elif self.level == 5:
             return self._shoot_l5()
+        elif self.level == 6:
+            return self._shoot_lx()
         else:
             return self._shoot_forward_pass()
 
@@ -532,6 +568,119 @@ class FootballEnv:
             oy += int(np.sign(dy))
         self.opp_pos = [int(np.clip(ox, 0, self.width - 1)), int(np.clip(oy, 0, self.height - 1))]
 
+    def _shoot_lx(self):
+        """
+        Level 6 shoot/pass — same mechanic as Level 5.
+        Outside shooting zone: diagonal pass toward teammate.
+        Inside shooting zone, aligned: direct goal (+80).
+        """
+        if not self.has_ball:
+            return config.REWARD_BAD_SHOT_LX
+
+        ax, ay = self.agent_pos
+        _, gy = self.goal_pos
+
+        if ax >= self.shoot_zone_x:
+            self.has_ball = False
+            if ay == gy:
+                self.ball_pos = list(self.goal_pos)
+                self.done = True
+                return config.REWARD_GOAL_LX
+            else:
+                self.ball_pos = [self.width - 1, ay]
+                return 0
+
+        self.has_ball = False
+        self._ball_in_flight = True
+        self._pass_target = list(self.tm_pos)
+        return 0
+
+    def _move_teammate_lx(self):
+        """
+        Rule-based teammate for Level 6 — identical movement logic to Level 5
+        but uses Level X reward constants.
+        """
+        reward = 0
+        tx, ty = self.tm_pos
+        gx, gy = self.goal_pos
+
+        if self.tm_has_ball:
+            target_x, target_y = gx, gy
+        elif self.has_ball:
+            target_x, target_y = self.shoot_zone_x, gy
+        else:
+            target_x, target_y = self.ball_pos[0], self.ball_pos[1]
+
+        dx = target_x - tx
+        dy = target_y - ty
+        if dx != 0 or dy != 0:
+            if abs(dx) >= abs(dy):
+                tx += int(np.sign(dx))
+            else:
+                ty += int(np.sign(dy))
+            self.tm_pos = [int(np.clip(tx, 0, self.width - 1)),
+                           int(np.clip(ty, 0, self.height - 1))]
+
+        if self.tm_has_ball:
+            self.ball_pos = self.tm_pos.copy()
+            if self.tm_pos == list(self.goal_pos):
+                self.tm_has_ball = False
+                self.done = True
+                reward += config.REWARD_GOAL_LX
+        elif not self.has_ball and self.tm_pos == self.ball_pos:
+            self.tm_has_ball = True
+            self._ball_in_flight = False
+            self._pass_target = None
+            self.ball_pos = self.tm_pos.copy()
+            reward += config.REWARD_PASS_SUCCESS_LX
+
+        return reward
+
+    def _move_and_check_opponents_lx(self):
+        """
+        Level 6: move opp1 (ball-chaser) and opp2 (agent-presser).
+        Opp1 reaching the ball ends the episode (like Level 3).
+        Opp2 reaching the agent while agent carries ball → tackle, episode ends.
+        """
+        reward = 0
+        if self.step_count % config.OPP_MOVE_EVERY == 0:
+            self._move_entity_toward(self.opp1_pos, self.ball_pos)
+            self._move_entity_toward(self.opp2_pos, self.agent_pos)
+
+        # Opp1 reaches ball (not while ball is in flight)
+        if not self._ball_in_flight and self.opp1_pos == self.ball_pos:
+            self.done = True
+            if self.has_ball:
+                self.has_ball = False
+                return config.REWARD_BALL_LOST
+            if self.tm_has_ball:
+                self.tm_has_ball = False
+                return config.REWARD_OPP_REACHES_BALL
+            return config.REWARD_OPP_REACHES_BALL
+
+        # Opp2 tackles agent carrying ball
+        if self.opp2_pos == self.agent_pos and self.has_ball:
+            self.has_ball = False
+            self.ball_pos = self.agent_pos.copy()
+            self.done = True
+            return config.REWARD_BALL_LOST
+
+        return reward
+
+    def _move_entity_toward(self, entity_pos, target_pos):
+        """Move a list [x, y] one cell toward target (Manhattan greedy, prefer x-axis)."""
+        ex, ey = entity_pos
+        tx, ty = target_pos
+        dx, dy = tx - ex, ty - ey
+        if dx == 0 and dy == 0:
+            return
+        if abs(dx) >= abs(dy):
+            ex += int(np.sign(dx))
+        else:
+            ey += int(np.sign(dy))
+        entity_pos[0] = int(np.clip(ex, 0, self.width - 1))
+        entity_pos[1] = int(np.clip(ey, 0, self.height - 1))
+
     def _dist_to_goal(self):
         """Manhattan distance from agent to goal."""
         ax, ay = self.agent_pos
@@ -547,8 +696,13 @@ class FootballEnv:
             self.ball_pos[1],
             int(self.has_ball),
         )
-        if self.level >= 3:
+        if self.level >= 3 and self.level != 6:
             state += (self.opp_pos[0], self.opp_pos[1])
         if self.level == 5:
             state += (self.tm_pos[0], self.tm_pos[1], int(self.tm_has_ball))
+        if self.level == 6:
+            state += (self.opp1_pos[0], self.opp1_pos[1],
+                      self.opp2_pos[0], self.opp2_pos[1],
+                      self.tm_pos[0],   self.tm_pos[1],
+                      int(self.tm_has_ball))
         return state

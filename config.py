@@ -22,6 +22,7 @@ BALL_START_X_L2 = 1
 BALL_START_X_L3 = 1
 BALL_START_X_L4 = 1
 BALL_START_X_L5 = 1
+BALL_START_X_LX = 1
 
 # Rewards — shared across all levels
 REWARD_STEP = -1           # every step
@@ -76,6 +77,23 @@ PASS_SPEED_L5  = 2          # cells the ball travels per step while in flight
 REWARD_GOAL_L5      = 70   # goal scored (agent shoots OR teammate scores)
 REWARD_PASS_SUCCESS = 15   # teammate picks up the passed ball
 REWARD_BAD_SHOT_L5  = -5   # shoot/pass without ball
+
+# Level X (6) — two opponents + teammate (state space explosion vs. Q-Table)
+# Opp1 starts near goal (ball-chaser like L3).
+# Opp2 starts mid-field (agent-presser — tackles when agent carries ball).
+# Teammate starts top mid-field, positions to receive passes.
+OPP1_START_X_LX = 8
+OPP1_START_Y_LX = 0
+OPP2_START_X_LX = 4
+OPP2_START_Y_LX = 5
+TM_START_X_LX   = 5
+TM_START_Y_LX   = 0
+PASS_SPEED_LX   = 2
+
+# Rewards — Level X
+REWARD_GOAL_LX         = 80
+REWARD_BAD_SHOT_LX     = -5
+REWARD_PASS_SUCCESS_LX = 15
 
 # Q-Learning
 Q_LR = 0.1

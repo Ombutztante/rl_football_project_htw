@@ -134,7 +134,28 @@ A rule-based teammate is added. The opponent starts mid-field blocking the direc
 
 ---
 
-The active level is set via `config.py` (`LEVEL = 1 | 2 | 3 | 4 | 5`).
+**Level X (6) — Two opponents + teammate (state space explosion)**
+
+Designed to push Q-Table to its limits and highlight DQN's generalisation advantage. Two independent opponents create a combinatorial state space (~1M+ states) that the Q-Table cannot explore within the training budget. DQN generalises across similar states via the neural network's shared weights.
+
+- State: `(agent_x, agent_y, ball_x, ball_y, has_ball, opp1_x, opp1_y, opp2_x, opp2_y, tm_x, tm_y, tm_has_ball)` — 12 elements
+- **Opp1** starts at `(OPP1_START_X_LX=8, 0)`, chases ball every `OPP_MOVE_EVERY` steps (like Level 3)
+- **Opp2** starts at `(OPP2_START_X_LX=4, 5)`, presses agent — tackles and ends episode if it reaches the agent who has the ball
+- **Teammate** starts at `(TM_START_X_LX=5, 0)`, positions to receive passes and scores autonomously (same as Level 5)
+- Pass mechanic: diagonal ball-in-flight pass outside shooting zone; direct shot inside shooting zone (same as Level 5)
+- Rewards:
+  - `+80` goal scored (agent shoots OR teammate scores)
+  - `+15` teammate picks up passed ball
+  - `+5` ball picked up
+  - `+1` moved closer to goal
+  - `-1` per step
+  - `-5` shoot/pass without ball
+  - `-10` opp1 reaches loose ball
+  - `-20` ball lost to opponent (tackle)
+
+---
+
+The active level is set via `config.py` (`LEVEL = 1 | 2 | 3 | 4 | 5 | 6`).
 
 ## Architecture
 
@@ -173,9 +194,10 @@ agent.learn(state, action, reward, next_state)
 **Agent vs. DQN state representation:** The Q-table uses the raw state tuple as key (no normalization needed). The DQN uses a normalized float array (`env.state_to_array(state)`), which also includes the fixed goal position (as per spec). `env.get_state_size()` returns the DQN input dimension.
 
 **DQN input (normalised float array, all coordinates divided by grid size − 1):**
-- Level 1+2 (7 values): ax, ay, bx, by, has_ball, gx, gy
-- Level 3+4 (9 values): + opp_x, opp_y
+- Level 1+2 (7 values):  ax, ay, bx, by, has_ball, gx, gy
+- Level 3+4 (9 values):  + opp_x, opp_y
 - Level 5   (12 values): + opp_x, opp_y, tm_x, tm_y, tm_has_ball
+- Level 6   (14 values): + opp1_x, opp1_y, opp2_x, opp2_y, tm_x, tm_y, tm_has_ball
 
 **Algorithm decision:** Q-Table is the baseline (close to lecture content, reliable and stable on small grids). DQN is the extension — it converges comparably on Level 1+2, but shows characteristic instability on Level 3 (Q-value drift after ε reaches minimum), demonstrating where tabular methods are actually more robust.
 
