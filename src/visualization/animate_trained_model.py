@@ -71,9 +71,15 @@ def _find_model_for_ep(base_pattern, ep):
     return dated or undated
 
 
+_LEGACY_MODELS = "results/models"
+
+
 def _load_qtable(level, ep=None):
     base = os.path.join(config.MODELS_DIR, f"q_table_level{level}_{{ep}}.pkl")
     path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
+    if not path and config.MODELS_DIR != _LEGACY_MODELS:
+        base = os.path.join(_LEGACY_MODELS, f"q_table_level{level}_{{ep}}.pkl")
+        path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
     if not path:
         return None, None, None
     agent = QTableAgent(n_actions=5)
@@ -90,6 +96,9 @@ def _load_qtable(level, ep=None):
 def _load_dqn(level, ep=None):
     base = os.path.join(config.MODELS_DIR, f"dqn_level{level}_{{ep}}.pt")
     path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
+    if not path and config.MODELS_DIR != _LEGACY_MODELS:
+        base = os.path.join(_LEGACY_MODELS, f"dqn_level{level}_{{ep}}.pt")
+        path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
     if not path:
         return None, None, None
     env_tmp = FootballEnv(level=level)
@@ -285,6 +294,8 @@ def main():
         if run:
             config.set_run_dir(run)
             print(f"Verwende neuesten Run: {run}")
+        else:
+            config.setup_run_dir()
 
     levels = [args.level] if args.level else [1, 2, 3]
     do_qt  = args.agent in ("qtable", "both")

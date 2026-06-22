@@ -168,6 +168,9 @@ if __name__ == "__main__":
                     help="Run-Verzeichnis (z.B. 'a_dev_1_2206_1'). Standard: neuester Run.")
     _args = ap.parse_args()
 
+    _LEGACY_LOGS = "results/logs"
+    _LEGACY_PLOTS = "results/plots"
+
     if _args.run:
         config.set_run_dir(_args.run)
     else:
@@ -175,15 +178,25 @@ if __name__ == "__main__":
         if run:
             config.set_run_dir(run)
             print(f"Verwende neuesten Run: {run}")
+        else:
+            config.setup_run_dir()
 
     level = _args.level if _args.level is not None else config.LEVEL
     ep    = _args.episodes if _args.episodes is not None else config.N_EPISODES
 
-    # In a run dir files have no date suffix; fall back to glob if exact not found
-    q_log = (_find_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}.json")
-             or _find_latest_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}_*.json"))
-    dqn_log = (_find_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}.json")
-               or _find_latest_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}_*.json"))
+    # Run dir first (no date suffix), then legacy path (may have date suffix)
+    q_log = (
+        _find_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}.json")
+        or _find_latest_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}_*.json")
+        or _find_log(_LEGACY_LOGS, f"q_table_level{level}_ep{ep}.json")
+        or _find_latest_log(_LEGACY_LOGS, f"q_table_level{level}_ep{ep}_*.json")
+    )
+    dqn_log = (
+        _find_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}.json")
+        or _find_latest_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}_*.json")
+        or _find_log(_LEGACY_LOGS, f"dqn_level{level}_ep{ep}.json")
+        or _find_latest_log(_LEGACY_LOGS, f"dqn_level{level}_ep{ep}_*.json")
+    )
 
     if q_log:
         stem = _plot_stem(q_log)
