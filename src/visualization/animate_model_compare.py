@@ -72,7 +72,7 @@ def _find_model_for_ep(base_pattern, ep):
     return dated or undated
 
 
-_LEGACY_MODELS = "results/models"
+_LEGACY_MODELS = "results/old/models"
 
 
 def _load_qtable(level, ep=None):

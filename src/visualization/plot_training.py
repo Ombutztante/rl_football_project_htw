@@ -168,8 +168,8 @@ if __name__ == "__main__":
                     help="Run-Verzeichnis (z.B. 'a_dev_1_2206_1'). Standard: neuester Run.")
     _args = ap.parse_args()
 
-    _LEGACY_LOGS = "results/logs"
-    _LEGACY_PLOTS = "results/plots"
+    _LEGACY_LOGS = "results/old/logs"
+    _LEGACY_PLOTS = "results/old/plots"
 
     if _args.run:
         config.set_run_dir(_args.run)
