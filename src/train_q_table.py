@@ -85,9 +85,7 @@ def train(n_snapshots=10):
                 f"  states={len(agent.q_table)}"
             )
 
-    from datetime import date as _date
-    date_tag = _date.today().strftime("%Y%m%d")
-    stem = f"q_table_level{config.LEVEL}_ep{config.N_EPISODES}_{date_tag}"
+    stem = f"q_table_level{config.LEVEL}_ep{config.N_EPISODES}"
     model_path = os.path.join(config.MODELS_DIR, f"{stem}.pkl")
     log_path   = os.path.join(config.LOGS_DIR,   f"{stem}.json")
     snap_path  = os.path.join(config.MODELS_DIR, f"{stem}_snapshots.pkl")
@@ -117,4 +115,5 @@ if __name__ == "__main__":
         config.LEVEL = args.level
     if args.episodes is not None:
         config.N_EPISODES = args.episodes
+    config.setup_run_dir()
     train(n_snapshots=args.n_snapshots)

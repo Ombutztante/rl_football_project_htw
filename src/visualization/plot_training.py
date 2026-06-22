@@ -145,7 +145,7 @@ def _plot_stem(log_path):
 
 
 def _find_latest_log(logs_dir, pattern):
-    """Return the most recently modified log matching pattern, or None."""
+    """Return the most recently modified log matching glob pattern, or None."""
     import glob as _glob
     matches = _glob.glob(os.path.join(logs_dir, pattern))
     if not matches:
@@ -153,21 +153,37 @@ def _find_latest_log(logs_dir, pattern):
     return max(matches, key=os.path.getmtime)
 
 
+def _find_log(logs_dir, filename):
+    """Return exact log file path if it exists, else None."""
+    path = os.path.join(logs_dir, filename)
+    return path if os.path.exists(path) else None
+
+
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--level", type=int, default=None)
     ap.add_argument("--episodes", type=int, default=None)
+    ap.add_argument("--run", type=str, default=None,
+                    help="Run-Verzeichnis (z.B. 'a_dev_1_2206_1'). Standard: neuester Run.")
     _args = ap.parse_args()
+
+    if _args.run:
+        config.set_run_dir(_args.run)
+    else:
+        run = config.latest_run()
+        if run:
+            config.set_run_dir(run)
+            print(f"Verwende neuesten Run: {run}")
+
     level = _args.level if _args.level is not None else config.LEVEL
     ep    = _args.episodes if _args.episodes is not None else config.N_EPISODES
 
-    # Glob for latest log matching level + episodes (date suffix may vary)
-    # Try dated version first (ep{N}_YYYYMMDD), fall back to undated (ep{N})
-    q_log = (_find_latest_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}_*.json")
-             or _find_latest_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}.json"))
-    dqn_log = (_find_latest_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}_*.json")
-               or _find_latest_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}.json"))
+    # In a run dir files have no date suffix; fall back to glob if exact not found
+    q_log = (_find_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}.json")
+             or _find_latest_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}_*.json"))
+    dqn_log = (_find_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}.json")
+               or _find_latest_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}_*.json"))
 
     if q_log:
         stem = _plot_stem(q_log)
@@ -190,7 +206,6 @@ if __name__ == "__main__":
         print(f"Kein DQN-Log gefunden für Level {level}, ep{ep}.")
 
     if q_log and dqn_log:
-        # comparison plot stem: replace agent prefix with "comparison"
         import re as _re
         q_stem = _plot_stem(q_log)
         cmp_stem = _re.sub(r"^q_table", "comparison", q_stem)

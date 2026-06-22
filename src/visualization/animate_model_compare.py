@@ -236,7 +236,17 @@ def main():
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--episodes", type=int, default=None,
                     help="Episodenzahl des zu ladenden Modells (Standard: neuestes)")
+    ap.add_argument("--run", type=str, default=None,
+                    help="Run-Verzeichnis (z.B. 'a_dev_1_2206_1'). Standard: neuester Run.")
     args = ap.parse_args()
+
+    if args.run:
+        config.set_run_dir(args.run)
+    else:
+        run = config.latest_run()
+        if run:
+            config.set_run_dir(run)
+            print(f"Verwende neuesten Run: {run}")
 
     print(f"Lade Modelle für Level {args.level} ...")
     qt_agent,  ep_qt,  stem_qt  = _load_qtable(args.level, ep=args.episodes)
@@ -249,10 +259,6 @@ def main():
         print("Fehler: Kein DQN-Modell gefunden.")
         return
     ep = ep_qt or ep_dqn
-    # derive date tag from Q-Table stem (e.g. "q_table_level4_ep3000_20260618" → "20260618")
-    import re as _re
-    _m = _re.search(r"_ep\d+_?(.*)$", stem_qt)
-    date_suffix = f"_{_m.group(1)}" if _m and _m.group(1) else ""
 
     env_qt  = FootballEnv(level=args.level)
     env_dqn = FootballEnv(level=args.level)
@@ -297,7 +303,7 @@ def main():
     target = frames[0].size
     frames = [f.resize(target, Image.LANCZOS) for f in frames]
 
-    out = os.path.join(config.ANIMATIONS_DIR, f"compare_level{args.level}_ep{ep}{date_suffix}.gif")
+    out = os.path.join(config.ANIMATIONS_DIR, f"compare_level{args.level}_ep{ep}.gif")
     os.makedirs(config.ANIMATIONS_DIR, exist_ok=True)
     frames[0].save(out, save_all=True, append_images=frames[1:],
                    loop=0, duration=int(1000 / args.fps), optimize=True)

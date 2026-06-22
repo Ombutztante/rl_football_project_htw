@@ -274,7 +274,17 @@ def main():
     ap.add_argument("--episodes", type=int, default=None,
                     help="Episodenzahl des zu ladenden Modells (Standard: neuestes)")
     ap.add_argument("--fps", type=int, default=3, help="Frames pro Sekunde (Standard: 3)")
+    ap.add_argument("--run", type=str, default=None,
+                    help="Run-Verzeichnis (z.B. 'a_dev_1_2206_1'). Standard: neuester Run.")
     args = ap.parse_args()
+
+    if args.run:
+        config.set_run_dir(args.run)
+    else:
+        run = config.latest_run()
+        if run:
+            config.set_run_dir(run)
+            print(f"Verwende neuesten Run: {run}")
 
     levels = [args.level] if args.level else [1, 2, 3]
     do_qt  = args.agent in ("qtable", "both")
@@ -286,7 +296,6 @@ def main():
             agent, ep, model_stem = _load_qtable(lv, ep=args.episodes)
             if agent:
                 frames = run_episode(lv, agent, is_dqn=False, label="Q-Table")
-                # gif name mirrors model stem: q_table_level4_ep3000_20260618 → animation_qtable_level4_ep3000_20260618
                 gif_stem = model_stem.replace("q_table_level", "animation_qtable_level", 1)
                 save_gif(frames,
                          os.path.join(config.ANIMATIONS_DIR, f"{gif_stem}.gif"),

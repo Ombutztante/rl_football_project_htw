@@ -94,8 +94,106 @@ REPLAY_WARMUP = 500        # minimum buffer size before learning starts
 GRAD_CLIP_NORM = 1.0       # max gradient norm for clipping
 HIDDEN_SIZE = 128
 
-# Output paths
-MODELS_DIR      = "results/models"
-LOGS_DIR        = "results/logs"
-PLOTS_DIR       = "results/plots"       # static PNG plots
-ANIMATIONS_DIR  = "results/animations"  # animated GIFs
+# Output paths — updated by setup_run_dir() or set_run_dir() at runtime
+RESULTS_BASE   = "results"
+MODELS_DIR     = "results/models"
+LOGS_DIR       = "results/logs"
+PLOTS_DIR      = "results/plots"
+ANIMATIONS_DIR = "results/animations"
+
+
+# ---------------------------------------------------------------------------
+# Run-directory helpers
+# ---------------------------------------------------------------------------
+import os as _os
+import re as _re
+import glob as _glob
+
+
+def _current_branch():
+    try:
+        import subprocess
+        branch = subprocess.check_output(
+            ["git", "branch", "--show-current"],
+            stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        return branch.replace("/", "-") or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _apply_run_dir(run_dir, create_dirs=False):
+    """Update module-level path constants to point inside run_dir."""
+    global MODELS_DIR, LOGS_DIR, PLOTS_DIR, ANIMATIONS_DIR
+    MODELS_DIR     = _os.path.join(run_dir, "models")
+    LOGS_DIR       = _os.path.join(run_dir, "logs")
+    PLOTS_DIR      = _os.path.join(run_dir, "plots")
+    ANIMATIONS_DIR = _os.path.join(run_dir, "animations")
+    if create_dirs:
+        for d in [MODELS_DIR, LOGS_DIR, PLOTS_DIR, ANIMATIONS_DIR]:
+            _os.makedirs(d, exist_ok=True)
+
+
+def setup_run_dir():
+    """
+    Create a new numbered run directory and update all path constants.
+    Call once at the start of every training script.
+
+    Naming: results/{branch}_{DDMM}_{counter}/
+    Example: results/a_dev_4_2206_1/
+    """
+    from datetime import date as _date
+    branch   = _current_branch()
+    date_str = _date.today().strftime("%d%m")
+    prefix   = f"{branch}_{date_str}_"
+    existing = _glob.glob(_os.path.join(RESULTS_BASE, f"{prefix}*"))
+    nums = []
+    for p in existing:
+        m = _re.search(r"(\d+)$", _os.path.basename(p))
+        if m:
+            nums.append(int(m.group(1)))
+    counter  = max(nums) + 1 if nums else 1
+    run_dir  = _os.path.join(RESULTS_BASE, f"{prefix}{counter}")
+    _apply_run_dir(run_dir, create_dirs=True)
+    print(f"Run-Verzeichnis: {run_dir}")
+    return run_dir
+
+
+def set_run_dir(name_or_path):
+    """
+    Point all path constants to an existing run directory (for visualization).
+    Accepts a run name ('a_dev_4_2206_1') or a full path.
+    """
+    if _os.path.isabs(name_or_path):
+        run_dir = name_or_path
+    else:
+        run_dir = _os.path.join(RESULTS_BASE, name_or_path)
+    _apply_run_dir(run_dir, create_dirs=True)
+    return run_dir
+
+
+def latest_run():
+    """Return the name of the most recently modified run directory, or None."""
+    dirs = [
+        p for p in _glob.glob(_os.path.join(RESULTS_BASE, "*_*_*"))
+        if _os.path.isdir(p)
+    ]
+    if not dirs:
+        return None
+    return _os.path.basename(max(dirs, key=_os.path.getmtime))
+
+
+def list_runs():
+    """Print all available run directories."""
+    dirs = sorted([
+        _os.path.basename(p)
+        for p in _glob.glob(_os.path.join(RESULTS_BASE, "*_*_*"))
+        if _os.path.isdir(p)
+    ])
+    if dirs:
+        print("Verfügbare Runs:")
+        for d in dirs:
+            print(f"  {d}")
+    else:
+        print("Keine Runs gefunden.")
+    return dirs
