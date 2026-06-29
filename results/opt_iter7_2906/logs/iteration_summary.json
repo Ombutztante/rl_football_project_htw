@@ -1,0 +1,26 @@
+{
+  "iteration": 7,
+  "run": "opt_iter7_2906",
+  "results": {
+    "L6_ep1000": {
+      "qtable": {
+        "goal_rate_pct": 1.0,
+        "avg_reward": 7.2
+      },
+      "dqn": {
+        "goal_rate_pct": 98.0,
+        "avg_reward": 91.7
+      }
+    },
+    "L6_ep3000": {
+      "qtable": {
+        "goal_rate_pct": 94.0,
+        "avg_reward": 77.1
+      },
+      "dqn": {
+        "goal_rate_pct": 90.0,
+        "avg_reward": 85.7
+      }
+    }
+  }
+}
