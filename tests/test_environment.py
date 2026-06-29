@@ -80,13 +80,13 @@ def test_l1_ball_pickup_sets_has_ball():
 
 def test_l1_ball_pickup_reward():
     # Agent at (bx-1, by), ball at (5,3), goal at (9,3)
-    # step(-1) + pickup(+5) + closer(+1) = 5
+    # step(-1) + pickup(+5) + closer(+1) + align(+1, on goal row with ball) = 6
     env = FootballEnv(level=1)
     env.reset()
     bx, by = env.ball_pos  # (5,3)
     env.agent_pos = [bx - 1, by]
     _, reward, _ = env.step(3)
-    assert reward == 5
+    assert reward == 6
 
 
 def test_l1_ball_follows_agent_when_carried():
@@ -133,17 +133,17 @@ def test_l1_shoot_in_zone_aligned_scores():
 
 
 def test_l1_shoot_in_zone_wrong_row_is_miss():
-    # SHOOT_ZONE_X=8, row 0 ≠ goal row 3 → miss, ball to right wall
+    # Zone: x>=8 AND |y-3|<=1 → (8,2) is in zone but wrong row → penalised miss
     env = FootballEnv(level=1)
     env.reset()
-    env.agent_pos = [8, 0]
+    env.agent_pos = [8, 2]
     env.has_ball = True
-    env.ball_pos = [8, 0]
+    env.ball_pos = [8, 2]
     _, reward, done = env.step(4)
     assert not done
-    assert reward == -1   # only step penalty
+    assert reward == -4   # -1 (step) + -3 (zone miss)
     assert not env.has_ball
-    assert env.ball_pos == [env.width - 1, 0]
+    assert env.ball_pos == [env.width - 1, 2]
 
 
 def test_l1_walking_into_goal_does_not_score():

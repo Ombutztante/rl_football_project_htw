@@ -144,19 +144,61 @@ def _plot_stem(log_path):
     return os.path.splitext(os.path.basename(log_path))[0]
 
 
+def _find_latest_log(logs_dir, pattern):
+    """Return the most recently modified log matching glob pattern, or None."""
+    import glob as _glob
+    matches = _glob.glob(os.path.join(logs_dir, pattern))
+    if not matches:
+        return None
+    return max(matches, key=os.path.getmtime)
+
+
+def _find_log(logs_dir, filename):
+    """Return exact log file path if it exists, else None."""
+    path = os.path.join(logs_dir, filename)
+    return path if os.path.exists(path) else None
+
+
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--level", type=int, default=None)
     ap.add_argument("--episodes", type=int, default=None)
+    ap.add_argument("--run", type=str, default=None,
+                    help="Run-Verzeichnis (z.B. 'a_dev_1_2206_1'). Standard: neuester Run.")
     _args = ap.parse_args()
+
+    _LEGACY_LOGS = "results/old/logs"
+    _LEGACY_PLOTS = "results/old/plots"
+
+    if _args.run:
+        config.set_run_dir(_args.run)
+    else:
+        run = config.latest_run()
+        if run:
+            config.set_run_dir(run)
+            print(f"Verwende neuesten Run: {run}")
+        else:
+            config.setup_run_dir()
+
     level = _args.level if _args.level is not None else config.LEVEL
     ep    = _args.episodes if _args.episodes is not None else config.N_EPISODES
 
-    q_log   = os.path.join(config.LOGS_DIR,  f"q_table_level{level}_ep{ep}.json")
-    dqn_log = os.path.join(config.LOGS_DIR,  f"dqn_level{level}_ep{ep}.json")
+    # Run dir first (no date suffix), then legacy path (may have date suffix)
+    q_log = (
+        _find_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}.json")
+        or _find_latest_log(config.LOGS_DIR, f"q_table_level{level}_ep{ep}_*.json")
+        or _find_log(_LEGACY_LOGS, f"q_table_level{level}_ep{ep}.json")
+        or _find_latest_log(_LEGACY_LOGS, f"q_table_level{level}_ep{ep}_*.json")
+    )
+    dqn_log = (
+        _find_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}.json")
+        or _find_latest_log(config.LOGS_DIR, f"dqn_level{level}_ep{ep}_*.json")
+        or _find_log(_LEGACY_LOGS, f"dqn_level{level}_ep{ep}.json")
+        or _find_latest_log(_LEGACY_LOGS, f"dqn_level{level}_ep{ep}_*.json")
+    )
 
-    if os.path.exists(q_log):
+    if q_log:
         stem = _plot_stem(q_log)
         plot_training(
             q_log,
@@ -164,9 +206,9 @@ if __name__ == "__main__":
             save_path=os.path.join(config.PLOTS_DIR, f"{stem}.png"),
         )
     else:
-        print(f"Kein Q-Table-Log gefunden: {q_log}")
+        print(f"Kein Q-Table-Log gefunden für Level {level}, ep{ep}.")
 
-    if os.path.exists(dqn_log):
+    if dqn_log:
         stem = _plot_stem(dqn_log)
         plot_training(
             dqn_log,
@@ -174,11 +216,14 @@ if __name__ == "__main__":
             save_path=os.path.join(config.PLOTS_DIR, f"{stem}.png"),
         )
     else:
-        print(f"Kein DQN-Log gefunden: {dqn_log}")
+        print(f"Kein DQN-Log gefunden für Level {level}, ep{ep}.")
 
-    if os.path.exists(q_log) and os.path.exists(dqn_log):
+    if q_log and dqn_log:
+        import re as _re
+        q_stem = _plot_stem(q_log)
+        cmp_stem = _re.sub(r"^q_table", "comparison", q_stem)
         plot_comparison(
             q_log, dqn_log,
             level=level,
-            save_path=os.path.join(config.PLOTS_DIR, f"comparison_level{level}_ep{ep}.png"),
+            save_path=os.path.join(config.PLOTS_DIR, f"{cmp_stem}.png"),
         )

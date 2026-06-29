@@ -56,39 +56,60 @@ def _find_model(pattern):
     files = [f for f in glob.glob(pattern) if "_snapshots" not in f]
     if not files:
         return None
-    def _ep_key(p):
+    def _key(p):
         m = _re.search(r"_ep(\d+)", os.path.basename(p))
-        return int(m.group(1)) if m else 0
-    return max(files, key=_ep_key)
+        ep = int(m.group(1)) if m else 0
+        return (ep, os.path.getmtime(p))  # newest date wins on equal episode count
+    return max(files, key=_key)
+
+
+def _find_model_for_ep(base_pattern, ep):
+    """Find model for a specific episode count, preferring dated files over undated."""
+    dated   = _find_model(base_pattern.replace("{ep}", f"ep{ep}_*"))
+    undated = _find_model(base_pattern.replace("{ep}", f"ep{ep}"))
+    if dated and undated:
+        return dated if os.path.getmtime(dated) >= os.path.getmtime(undated) else undated
+    return dated or undated
+
+
+_LEGACY_MODELS = "results/old/models"
 
 
 def _load_qtable(level, ep=None):
-    suffix = f"ep{ep}" if ep else "ep*"
-    path = _find_model(os.path.join(config.MODELS_DIR, f"q_table_level{level}_{suffix}.pkl"))
+    base = os.path.join(config.MODELS_DIR, f"q_table_level{level}_{{ep}}.pkl")
+    path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
+    if not path and config.MODELS_DIR != _LEGACY_MODELS:
+        base = os.path.join(_LEGACY_MODELS, f"q_table_level{level}_{{ep}}.pkl")
+        path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
     if not path:
-        return None, None
+        return None, None, None
     agent = QTableAgent(n_actions=5)
     agent.load(path)
     agent.epsilon = 0.0
     import re
-    m = re.search(r"_ep(\d+)", os.path.basename(path))
+    stem = os.path.splitext(os.path.basename(path))[0]
+    m = re.search(r"_ep(\d+)", stem)
     loaded_ep = int(m.group(1)) if m else ep
-    return agent, loaded_ep
+    return agent, loaded_ep, stem
 
 
 def _load_dqn(level, ep=None):
-    suffix = f"ep{ep}" if ep else "ep*"
-    path = _find_model(os.path.join(config.MODELS_DIR, f"dqn_level{level}_{suffix}.pt"))
+    base = os.path.join(config.MODELS_DIR, f"dqn_level{level}_{{ep}}.pt")
+    path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
+    if not path and config.MODELS_DIR != _LEGACY_MODELS:
+        base = os.path.join(_LEGACY_MODELS, f"dqn_level{level}_{{ep}}.pt")
+        path = _find_model_for_ep(base, ep) if ep else _find_model(base.replace("{ep}", "ep*"))
     if not path:
-        return None, None
+        return None, None, None
     env_tmp = FootballEnv(level=level)
     agent = DQNAgent(state_size=env_tmp.get_state_size(), n_actions=5)
     agent.load(path)
     agent.epsilon = 0.0
     import re
-    m = re.search(r"_ep(\d+)", os.path.basename(path))
+    stem = os.path.splitext(os.path.basename(path))[0]
+    m = re.search(r"_ep(\d+)", stem)
     loaded_ep = int(m.group(1)) if m else ep
-    return agent, loaded_ep
+    return agent, loaded_ep, stem
 
 
 def _draw_grid(ax, env, label, action, total_reward, done,
@@ -224,11 +245,23 @@ def main():
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--episodes", type=int, default=None,
                     help="Episodenzahl des zu ladenden Modells (Standard: neuestes)")
+    ap.add_argument("--run", type=str, default=None,
+                    help="Run-Verzeichnis (z.B. 'a_dev_1_2206_1'). Standard: neuester Run.")
     args = ap.parse_args()
 
+    if args.run:
+        config.set_run_dir(args.run)
+    else:
+        run = config.latest_run()
+        if run:
+            config.set_run_dir(run)
+            print(f"Verwende neuesten Run: {run}")
+        else:
+            config.setup_run_dir()
+
     print(f"Lade Modelle für Level {args.level} ...")
-    qt_agent,  ep_qt  = _load_qtable(args.level, ep=args.episodes)
-    dqn_agent, ep_dqn = _load_dqn(args.level,    ep=args.episodes)
+    qt_agent,  ep_qt,  stem_qt  = _load_qtable(args.level, ep=args.episodes)
+    dqn_agent, ep_dqn, stem_dqn = _load_dqn(args.level,    ep=args.episodes)
 
     if not qt_agent:
         print("Fehler: Kein Q-Table-Modell gefunden.")
