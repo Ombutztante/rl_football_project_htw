@@ -365,17 +365,30 @@ Stabile Resultate — Konfiguration bestätigt. L1–L5 Q-Table und DQN konvergi
 
 ---
 
-## L4 DQN — Dedizierter Optimierungslauf
+## L4 DQN — Sparse Reward Experiment (Iteration 6)
 
-*(Geplant nach Abschluss des allgemeinen Loops. Separate Läufe nur für Level 4, aggressivere Eingriffe ohne Nebenwirkungen auf andere Level.)*
+**Hypothese:** Das DQN-Versagen auf L4 ist kein Algorithmus-Fehler sondern ein **Sparse Reward Problem**. Mit OBSTACLE_HEIGHT=4 blockiert das Hindernis auch die Tor-Reihe (y=3) — DQN muss 8–10 exakt gezielte Schritte in Folge ausführen bevor es den Tor-Reward sieht. Das passiert bei zufälliger ε-greedy-Exploration fast nie. Q-Table hat dieses Problem nicht: jeder besuchte Zustand hinterlässt direkt einen Q-Wert-Eintrag.
 
-**Bekannte Ursache der 0%-Goal-Rate:**
-DQN lernt eine "pass-chase-pass"-Loop: Ball aufnehmen → Vorwärtspass (+2) → Ball jagen → Gegner fängt Ball (-10). Netto ≈ -12 pro Episode. Der Bypass-Korridor (y=4,5) wird systematisch ignoriert, weil der Umweg kurzfristig negativ wirkt (Distanz zum Tor erhöht sich während Detour).
+**Experiment:** OBSTACLE_HEIGHT von 4 auf **2** reduziert (Reihen 0–1 blockiert, Reihen 2–5 frei). Tor-Reihe (y=3) ist jetzt direkt durch Spalte 6 erreichbar → mehr zufällige Tor-Treffer → DQN startet Lernprozess.
 
-**Geplante Ansätze:**
-1. **Corridor-Shaping**: Schrittweiser Reward (+0.5) für jede Bewegung im freien Korridor (x>6, y≥4) mit Ball — überbrückt die Reward-Lücke während des Umwegs
-2. **Mehr Episoden**: 5000–10000 Episoden nur für L4 DQN
-3. **Erhöhter Gegner-Abstand**: `OPP_START_X_FROM_GOAL` von 1 auf 3 erhöhen → Gegner startet weiter vom Ball, gibt DQN mehr Lernzeit für den Bypass
+**Run-Verzeichnis:** `results/opt_iter6_2906/` | **OBSTACLE_HEIGHT nach Experiment auf 4 zurückgesetzt.**
+
+### Ergebnisse
+
+| Variante | Q-Table ep1000 | Q-Table ep3000 | DQN ep1000 | DQN ep3000 |
+|---|---|---|---|---|
+| **L4 Hard** (H=4, Iter5) | 89% | 93% | **0%** | **0%** |
+| **L4 Easy** (H=2, Iter6) | 87% | 95% | **89%** | **93%** |
+
+### Analyse
+
+**Hypothese vollständig bestätigt.** DQN springt von 0% auf 89%/93% — identische Konfiguration, nur kleineres Hindernis.
+
+**Zusätzliche Beobachtung im 3000-Ep-Plot:** DQN zeigt bei ep1700–2200 einen **charakteristischen Einbruch** (Goal% fällt auf ~5%, erholt sich bis ep2500). Q-Table verläuft die ganze Zeit stabil. Das ist klassisches **Q-Value-Drift** — DQN destabilisiert sich kurzzeitig wenn das Netz in ein anderes lokales Optimum konvergiert. Q-Table hat dieses strukturelle Problem nicht.
+
+**Präsentations-Kernaussagen (beide auf einem Plot sichtbar):**
+1. *Sparse Reward erklärt das Versagen*: Kleineres Hindernis = mehr zufällige Erfolgspfade = DQN lernt
+2. *DQN-Instabilität bleibt strukturell*: Selbst wenn DQN das Problem lösen kann, driftet es — Q-Table nie
 
 ---
 

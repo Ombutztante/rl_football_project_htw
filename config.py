@@ -55,9 +55,10 @@ REWARD_BALL_LOST = -20     # opponent tackles agent who has ball → episode end
 
 # Level 4 — static obstacle (vertical wall, 1 column wide, 4 rows tall)
 # Rows 0–3 at column 6 are blocked; rows 4–5 are free to pass around below.
+# (L4-easy experiment with height=2 is in results/opt_iter6_2906/)
 OBSTACLE_X       = 6  # column of the obstacle
 OBSTACLE_Y_START = 0  # first blocked row (0 = top)
-OBSTACLE_HEIGHT  = 4  # number of blocked rows
+OBSTACLE_HEIGHT  = 4  # number of blocked rows (standard L4)
 
 # Rewards — Level 4 (extends Level 3 + obstacle)
 REWARD_GOAL_L4         = 60  # goal scored (harder than L3, so higher reward)
