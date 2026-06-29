@@ -39,17 +39,14 @@ Claude analysiert nach jeder Iteration die Trainingskurven und Metriken, entsche
 
 | Iteration | Beschreibung | Datum |
 |---|---|---|
-| 0 | Baseline — keine Änderungen | — |
+| 0 | Baseline — keine Änderungen | 2026-06-29 |
 | 1 | Wall-Penalty, Bypass-Reward implementiert, L5 Epsilon-Fix, REWARD_CLOSER mit Ball | 2026-06-29 |
 | 2 | Bypass +8, Wall -1, REWARD_CLOSER_NO_BALL=0.5, L4 Standard-Epsilon | 2026-06-29 |
 | 3 | DQN LR 5e-5, REPLAY_WARMUP 800 — Stabilisierung Konvergenz | 2026-06-29 |
 | 4 | Revert LR→1e-4, Warmup→500; MEMORY_SIZE 20000 | 2026-06-29 |
 | 5 | Finale Bestätigung: MEMORY_SIZE→15000, alle anderen wie Iter2 | 2026-06-29 |
-| 6 | — | — |
-| 7 | — | — |
-| 8 | — | — |
-| 9 | — | — |
-| 10 | — | — |
+| 6 | L4 Sparse-Reward-Experiment: OBSTACLE_HEIGHT 4→2 (danach revert) | 2026-06-29 |
+| 7 | Level 6 Erstlauf: Q-Table + DQN, 1000 + 3000 Episoden | 2026-06-29 |
 
 ---
 
@@ -392,6 +389,54 @@ Stabile Resultate — Konfiguration bestätigt. L1–L5 Q-Table und DQN konvergi
 
 ---
 
+## Iteration 7 — Level 6 Erstlauf
+
+**Datum:** 2026-06-29  
+**Run-Verzeichnis:** `results/opt_iter7_2906/`  
+**Hypothese:** Level 6 (zwei Gegner + Mitspieler) ist die komplexeste Stufe. Der größere Zustandsraum könnte DQNs Generalisierungsvorteil gegenüber Q-Table erstmals sichtbar machen — Q-Table muss jeden State einzeln besuchen, DQN kann interpolieren.
+
+**Konfiguration:** Finale Parameter aus Iteration 5 (keine Änderungen). Nur Level 6, 1000 + 3000 Episoden.
+
+### Ergebnisse
+
+| Agent | ep1000 Goal% | ep1000 AvgR | ep3000 Goal% | ep3000 AvgR |
+|---|---|---|---|---|
+| Q-Table | **1%** | 7.2 | **94%** | 77.1 |
+| DQN | **98%** | 91.7 | **90%** | 85.7 |
+
+### Trainingsverlauf (aus Logs)
+
+**Q-Table ep3000:**
+- ep500: 28.8% — breite Exploration, ε noch hoch
+- ep1000: 5.2% — ε reached minimum, zu wenige States konvergiert
+- ep1500: 6.2% — bleibt stecken (bekannte Q-Table-Lücke bei großem Zustandsraum)
+- ep2000: **91%** — plötzlicher Durchbruch, genug States abgedeckt
+- ep3000: 94.8% — stabil
+
+**DQN ep3000:**
+- ep500: 37.4% — frühes Lernen durch Generalisierung
+- ep1000: 80.8% — bereits gut konvergiert
+- ep1500: **94.8%** — Peak
+- ep2000: 43.2% — **Q-Value-Drift-Einbruch**
+- ep2500: 6.0% — Talsohle
+- ep3000: 74.6% → letzte 100 Ep.: 90% — Erholung
+
+### Analyse
+
+**Q-Table ep1000 = 1%: Kein Versagen, sondern Zustandsraum-Sättigung.**  
+L6 hat ~1.170 besuchte States bei ep3000. Bei ep1000 erst ~930 — zu wenige um alle notwendigen Übergänge stabil zu bewerten. Q-Table braucht schlicht mehr Episoden als bei L1–L5, weil der effektive Zustandsraum mit zwei Gegnern + Mitspieler deutlich wächst. Ab ep1600 läuft es stabil auf 90–95%.
+
+**DQN ep1000 = 98%: Generalisierungsvorteil.**  
+DQN ist bei 1000 Episoden *besser* als Q-Table, weil das Netz nicht jeden State einzeln besuchen muss. Ähnliche Zustände bekommen ähnliche Q-Werte durch die NN-Approximation — das kompensiert die begrenzte Exploration.
+
+**DQN ep3000-Instabilität: Charakteristischer Q-Value-Drift.**  
+Der Einbruch ep1600→ep2500 (94% → 6%) ist das gleiche Muster wie auf L4-Easy: DQN konvergiert in ein lokales Optimum, wird durch Verteilungsverschiebung im Replay Buffer destabilisiert und muss sich erholen. Q-Table zeigt dieses Verhalten nie — einmal gelernte Q-Werte werden nicht aktiv überschrieben.
+
+**Umkehrung der bisherigen Erzählung:**  
+Auf L1–L5 gilt: "Beide Agenten vergleichbar, Q-Table stabiler." L6 ergänzt: "Bei großem Zustandsraum konvergiert DQN schneller — aber bleibt strukturell instabiler." Die Wahl des Algorithmus hängt vom Zustandsraum und der Stabilitätsanforderung ab.
+
+---
+
 ## Gesamtübersicht — Baseline vs. Finale Konfiguration (Iteration 5)
 
 ### Beste erreichte Ergebnisse (Iteration 2 = beste DQN, Iteration 5 = stabiler Abschluss)
@@ -405,9 +450,11 @@ Stabile Resultate — Konfiguration bestätigt. L1–L5 Q-Table und DQN konvergi
 | L3 | Q-Table | 95% | 92% | ≈ |
 | L3 | DQN | 89% | **96%** | **+7%** |
 | L4 | Q-Table | 94% | 93% | ≈ |
-| L4 | DQN | **0%** | **0%** | — (dedizierter Lauf geplant) |
+| L4 | DQN | **0%** | **0%** | — (Sparse Reward, Iter6 zeigt: mit H=2 lösbar) |
 | L5 | Q-Table | 94% | **99%** | **+5%** |
 | L5 | DQN | **0%** | **99%** | **+99%** |
+| L6 | Q-Table | — | **94%** | (Erstlauf Iter7) |
+| L6 | DQN | — | **90%** | (Erstlauf Iter7, DQN ep1000=98%) |
 
 ### Wichtigste Erkenntnisse
 
