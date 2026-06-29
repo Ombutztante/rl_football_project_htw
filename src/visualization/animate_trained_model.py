@@ -43,6 +43,8 @@ C = {
     "pball":     "#CE93D8",
     "ball":      "#FF8A65",
     "opp":       "#EF5350",
+    "opp2":      "#FF6F00",
+    "teammate":  "#66BB6A",
     "border":    "#2A3A6A",
     "goal_edge": "#66BB6A",
     "text":      "#ECF0F1",
@@ -168,8 +170,23 @@ def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done
                     ha="center", va="center", fontsize=10, fontweight="bold",
                     color="white", zorder=5)
 
-    # Opponent (Level 3)
-    if env.level >= 3:
+    # Opponent (Level 3/4) or Opponent 1 (Level 6)
+    if env.level >= 3 and env.level != 5:
+        opp1 = env.opp1_pos if env.level == 6 else env.opp_pos
+        ox, oy = opp1
+        if 0 <= ox < W and 0 <= oy < H:
+            ody = H - 1 - oy
+            ax.add_patch(FancyBboxPatch(
+                (ox + 0.12, ody + 0.12), 0.76, 0.76,
+                boxstyle="round,pad=0.04",
+                facecolor=C["opp"], edgecolor="#7B0000", linewidth=1.8, zorder=4,
+            ))
+            ax.text(ox + 0.5, ody + 0.5, "X",
+                    ha="center", va="center", fontsize=13, fontweight="bold",
+                    color="white", zorder=5)
+
+    # Level 5: opponent blocking goal row
+    if env.level == 5:
         ox, oy = env.opp_pos
         if 0 <= ox < W and 0 <= oy < H:
             ody = H - 1 - oy
@@ -179,6 +196,35 @@ def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done
                 facecolor=C["opp"], edgecolor="#7B0000", linewidth=1.8, zorder=4,
             ))
             ax.text(ox + 0.5, ody + 0.5, "X",
+                    ha="center", va="center", fontsize=13, fontweight="bold",
+                    color="white", zorder=5)
+
+    # Level 6: second opponent
+    if env.level == 6:
+        ox2, oy2 = env.opp2_pos
+        if 0 <= ox2 < W and 0 <= oy2 < H:
+            ody2 = H - 1 - oy2
+            ax.add_patch(FancyBboxPatch(
+                (ox2 + 0.12, ody2 + 0.12), 0.76, 0.76,
+                boxstyle="round,pad=0.04",
+                facecolor=C["opp2"], edgecolor="#7B0000", linewidth=1.8, zorder=4,
+            ))
+            ax.text(ox2 + 0.5, ody2 + 0.5, "Y",
+                    ha="center", va="center", fontsize=13, fontweight="bold",
+                    color="white", zorder=5)
+
+    # Teammate (Level 5 + 6)
+    if env.level in (5, 6):
+        tx, ty = env.tm_pos
+        if 0 <= tx < W and 0 <= ty < H:
+            tdy = H - 1 - ty
+            tm_fc = C["pball"] if getattr(env, "tm_has_ball", False) else C["teammate"]
+            ax.add_patch(FancyBboxPatch(
+                (tx + 0.12, tdy + 0.12), 0.76, 0.76,
+                boxstyle="round,pad=0.04",
+                facecolor=tm_fc, edgecolor="#1B5E20", linewidth=1.8, zorder=4,
+            ))
+            ax.text(tx + 0.5, tdy + 0.5, "T",
                     ha="center", va="center", fontsize=13, fontweight="bold",
                     color="white", zorder=5)
 
@@ -221,8 +267,12 @@ def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done
         handles.append(mpatches.Patch(facecolor=C["zone"], label="Schusszone"))
     if env.level >= 3:
         handles.append(mpatches.Patch(facecolor=C["opp"], label="Gegner (X)"))
-    if env.level >= 4:
+    if env.level == 6:
+        handles.append(mpatches.Patch(facecolor=C["opp2"], label="Gegner 2 (Y)"))
+    if env.level >= 4 and env.level not in (5, 6):
         handles.append(mpatches.Patch(facecolor=C["obstacle"], edgecolor="#555555", label="Hindernis (#)"))
+    if env.level in (5, 6):
+        handles.append(mpatches.Patch(facecolor=C["teammate"], label="Mitspieler (T)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=len(handles),
               bbox_to_anchor=(0.5, -0.12), framealpha=0.92, edgecolor=C["border"])
 
@@ -276,8 +326,8 @@ def save_gif(frames, path, fps):
 
 def main():
     ap = argparse.ArgumentParser(description="Animierte GIFs von trainierten RL-Agenten")
-    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4],
-                    help="Level (1/2/3/4); Standard: alle")
+    ap.add_argument("--level", type=int, choices=[1, 2, 3, 4, 5, 6],
+                    help="Level (1–6); Standard: alle")
     ap.add_argument("--agent", choices=["qtable", "dqn", "both"], default="both",
                     help="Welchen Agenten animieren (Standard: beide)")
     ap.add_argument("--episodes", type=int, default=None,
