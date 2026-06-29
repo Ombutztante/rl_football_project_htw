@@ -414,3 +414,287 @@ def test_l3_dribble_to_goal_scores_50():
     assert done
     # -1 (step) + 1 (closer, dist 1→0) + 50 (goal L3) = 50
     assert reward == 50
+
+
+# ===========================================================================
+# Level 4 — static obstacle blocks direct path (extends Level 3)
+# ===========================================================================
+
+def test_l4_state_has_7_elements():
+    env = FootballEnv(level=4)
+    state = env.reset()
+    assert len(state) == 7  # same as Level 3
+
+
+def test_l4_obstacle_blocks_agent():
+    import config as cfg
+    env = FootballEnv(level=4)
+    env.reset()
+    # OBSTACLE_X=6, OBSTACLE_Y_START=0, OBSTACLE_HEIGHT=4 → cells (6,0)–(6,3) blocked
+    env.agent_pos = [5, 1]   # directly left of obstacle row 1
+    env.opp_pos = [0, 0]
+    env.step_count = 0       # step → 1, 1%2≠0 → no opponent move
+    state, reward, _ = env.step(3)   # right → blocked
+    assert state[0] == 5             # agent did not move
+    assert reward == -1 + cfg.REWARD_HIT_OBSTACLE   # -3
+
+
+def test_l4_agent_can_navigate_below_obstacle():
+    env = FootballEnv(level=4)
+    env.reset()
+    # Rows 0–3 at x=6 are blocked; row 4 is free
+    env.agent_pos = [5, 4]
+    env.opp_pos = [0, 0]
+    env.step_count = 0
+    state, _, _ = env.step(3)   # right → free cell at (6, 4)
+    assert state[0] == 6
+
+
+def test_l4_shot_blocked_by_obstacle():
+    import config as cfg
+    env = FootballEnv(level=4)
+    env.reset()
+    # Agent at (4,1) shoots — ball travels through (5,1) then hits obstacle at (6,1)
+    env.agent_pos = [4, 1]
+    env.has_ball = True
+    env.ball_pos = [4, 1]
+    env.opp_pos = [0, 5]
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert not done
+    assert reward == -1 + cfg.REWARD_SHOT_BLOCKED   # -6
+    assert env.ball_pos == [5, 1]   # stopped one cell before obstacle
+
+
+def test_l4_dribble_to_goal_scores_60():
+    import config as cfg
+    env = FootballEnv(level=4)
+    env.reset()
+    gx, gy = env.goal_pos
+    env.agent_pos = [gx - 1, gy]
+    env.has_ball = True
+    env.ball_pos = [gx - 1, gy]
+    env.opp_pos = [0, 0]
+    env.step_count = 0
+    _, reward, done = env.step(3)   # right → into goal
+    assert done
+    # -1 (step) + 1 (closer) + 60 (goal L4) = 60
+    assert reward == 60
+
+
+# ===========================================================================
+# Level 5 — cooperative play with teammate
+# ===========================================================================
+
+def test_l5_state_has_10_elements():
+    env = FootballEnv(level=5)
+    state = env.reset()
+    assert len(state) == 10   # (ax,ay,bx,by,has_ball,opp_x,opp_y,tm_x,tm_y,tm_has_ball)
+
+
+def test_l5_teammate_initial_position():
+    import config as cfg
+    env = FootballEnv(level=5)
+    state = env.reset()
+    assert state[7] == cfg.TM_START_X_L5
+    assert state[8] == cfg.TM_START_Y_L5
+    assert state[9] == 0   # tm_has_ball False
+
+
+def test_l5_opponent_initial_position():
+    import config as cfg
+    env = FootballEnv(level=5)
+    state = env.reset()
+    assert state[5] == cfg.OPP_START_X_L5
+    assert state[6] == cfg.OPP_START_Y_L5
+
+
+def test_l5_shoot_without_ball_penalty():
+    import config as cfg
+    env = FootballEnv(level=5)
+    env.reset()
+    env.has_ball = False
+    env.agent_pos = [3, 3]
+    env.ball_pos = [0, 0]
+    env.opp_pos = [0, 5]
+    env.tm_pos = [5, 0]
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert not done
+    assert reward == -1 + cfg.REWARD_BAD_SHOT_L5   # -6
+
+
+def test_l5_ball_travels_diagonally_toward_teammate():
+    env = FootballEnv(level=5)
+    env.reset()
+    env.agent_pos = [3, 3]
+    env.has_ball = True
+    env.ball_pos = [3, 3]
+    env.opp_pos = [0, 5]
+    env.tm_pos = [9, 5]   # far teammate so ball doesn't arrive in one step
+    env.step_count = 0
+    env.step(4)   # pass → ball travels 2 diagonal steps (3,3)→(4,4)→(5,5)
+    # _move_teammate moves tm (9,5) toward ball (5,5) → tm at (8,5), no pickup yet
+    assert env.ball_pos == [5, 5]
+    assert not env.has_ball
+    assert not env.tm_has_ball
+
+
+def test_l5_teammate_picks_up_ball_gives_reward():
+    import config as cfg
+    env = FootballEnv(level=5)
+    env.reset()
+    # Teammate at (5,0), ball at (3,3) — after pass ball travels to (5,1),
+    # teammate moves from (5,0) to (5,1) and collects it in the same step.
+    env.agent_pos = [3, 3]
+    env.has_ball = True
+    env.ball_pos = [3, 3]
+    env.opp_pos = [0, 5]
+    env.tm_pos = [5, 0]
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert env.tm_has_ball
+    assert reward == -1 + cfg.REWARD_PASS_SUCCESS   # 14
+
+
+def test_l5_shoot_in_zone_aligned_scores():
+    import config as cfg
+    env = FootballEnv(level=5)
+    env.reset()
+    gx, gy = env.goal_pos   # (9, 3)
+    env.agent_pos = [env.shoot_zone_x, gy]   # SHOOT_ZONE_X=8, goal row
+    env.has_ball = True
+    env.ball_pos = [env.shoot_zone_x, gy]
+    env.opp_pos = [0, 5]
+    env.tm_pos = [5, 0]
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert done
+    assert reward == -1 + cfg.REWARD_GOAL_L5   # 69
+
+
+# ===========================================================================
+# Level 6 — Two opponents + teammate (state space explosion)
+# ===========================================================================
+
+def test_l6_state_has_12_elements():
+    env = FootballEnv(level=6)
+    state = env.reset()
+    assert len(state) == 12
+
+
+def test_l6_state_array_has_14_elements():
+    env = FootballEnv(level=6)
+    state = env.reset()
+    arr = env.state_to_array(state)
+    assert arr.shape == (14,)
+    assert env.get_state_size() == 14
+
+
+def test_l6_initial_positions():
+    import config as cfg
+    env = FootballEnv(level=6)
+    state = env.reset()
+    # opp1 at indices 5,6 — opp2 at 7,8 — tm at 9,10 — tm_has_ball at 11
+    assert state[5] == cfg.OPP1_START_X_LX
+    assert state[6] == cfg.OPP1_START_Y_LX
+    assert state[7] == cfg.OPP2_START_X_LX
+    assert state[8] == cfg.OPP2_START_Y_LX
+    assert state[9] == cfg.TM_START_X_LX
+    assert state[10] == cfg.TM_START_Y_LX
+    assert state[11] == 0   # tm_has_ball False
+
+
+def test_l6_opp1_reaches_loose_ball_ends_episode():
+    import config as cfg
+    env = FootballEnv(level=6)
+    env.reset()
+    env.ball_pos = [3, 0]
+    env.agent_pos = [0, 0]
+    env.has_ball = False
+    env.opp1_pos = [4, 0]          # one step right of ball
+    env.opp2_pos = [0, 5]          # far away
+    env.step_count = cfg.OPP_MOVE_EVERY - 1
+    _, reward, done = env.step(0)  # triggers opp1 move → reaches ball
+    assert done
+    assert reward == -1 + cfg.REWARD_OPP_REACHES_BALL
+
+
+def test_l6_opp2_tackles_agent_with_ball():
+    import config as cfg
+    env = FootballEnv(level=6)
+    env.reset()
+    env.agent_pos = [3, 0]
+    env.has_ball = True
+    env.ball_pos = [3, 0]
+    env.opp1_pos = [0, 5]          # far away
+    env.opp2_pos = [4, 0]          # one step right of agent
+    env.step_count = cfg.OPP_MOVE_EVERY - 1
+    _, reward, done = env.step(0)  # agent clamped at y=0; opp2 moves to (3,0)
+    assert done
+    assert reward == -1 + cfg.REWARD_BALL_LOST
+    assert not env.has_ball
+
+
+def test_l6_shoot_without_ball_penalty():
+    import config as cfg
+    env = FootballEnv(level=6)
+    env.reset()
+    env.has_ball = False
+    env.agent_pos = [3, 3]
+    env.ball_pos = [0, 0]
+    env.opp1_pos = [0, 5]
+    env.opp2_pos = [9, 5]
+    env.tm_pos = [5, 0]
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert not done
+    assert reward == -1 + cfg.REWARD_BAD_SHOT_LX   # -6
+
+
+def test_l6_shoot_in_zone_aligned_scores():
+    import config as cfg
+    env = FootballEnv(level=6)
+    env.reset()
+    _, gy = env.goal_pos
+    env.agent_pos = [env.shoot_zone_x, gy]
+    env.has_ball = True
+    env.ball_pos = [env.shoot_zone_x, gy]
+    env.opp1_pos = [0, 5]
+    env.opp2_pos = [0, 4]
+    env.tm_pos = [5, 0]
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert done
+    assert reward == -1 + cfg.REWARD_GOAL_LX   # 79
+
+
+def test_l6_pass_outside_zone_puts_ball_in_flight():
+    env = FootballEnv(level=6)
+    env.reset()
+    env.agent_pos = [3, 3]
+    env.has_ball = True
+    env.ball_pos = [3, 3]
+    env.opp1_pos = [0, 5]
+    env.opp2_pos = [9, 5]
+    env.tm_pos = [9, 0]
+    env.step_count = 0
+    env.step(4)   # pass → ball in flight
+    assert not env.has_ball
+    assert env._ball_in_flight
+
+
+def test_l6_teammate_picks_up_ball_gives_reward():
+    import config as cfg
+    env = FootballEnv(level=6)
+    env.reset()
+    env.agent_pos = [3, 3]
+    env.has_ball = True
+    env.ball_pos = [3, 3]
+    env.opp1_pos = [0, 5]
+    env.opp2_pos = [9, 5]
+    env.tm_pos = [5, 0]   # same target as L5 test
+    env.step_count = 0
+    _, reward, done = env.step(4)
+    assert env.tm_has_ball
+    assert reward == -1 + cfg.REWARD_PASS_SUCCESS_LX   # 14

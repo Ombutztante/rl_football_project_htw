@@ -59,7 +59,7 @@ def _final_stats(log, last_n=100):
 
 
 def main():
-    levels = [1, 2, 3, 4]
+    levels = [1, 2, 3, 4, 5, 6]
 
     # Load all logs
     qt_logs  = {lv: _load(os.path.join(config.LOGS_DIR, f"q_table_level{lv}_ep*.json"))

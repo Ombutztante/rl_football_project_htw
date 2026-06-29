@@ -23,6 +23,8 @@ BALL_START_X_L1 = None
 BALL_START_X_L2 = 1
 BALL_START_X_L3 = 1
 BALL_START_X_L4 = 1
+BALL_START_X_L5 = 1
+BALL_START_X_LX = 1
 
 # Rewards — shared across all levels
 REWARD_STEP = -1           # every step
@@ -66,13 +68,42 @@ REWARD_BYPASS_OBSTACLE =  2  # agent carries ball through free corridor (y >= OB
 # With decay=0.998 epsilon reaches 0.05 at ~ep1800, giving enough exploration on 2000 episodes.
 DQN_EPSILON_DECAY_L4 = 0.998
 
-# Level 3 opponent
+# Level 3/4 opponent
 # Opponent starts at x = (GRID_WIDTH - 1) - OPP_START_X_FROM_GOAL, y = 0 (top row)
 # With defaults (10×6 grid): x = 9 - 1 = 8, y = 0
-# Tune OPP_START_X_FROM_GOAL and OPP_MOVE_EVERY to adjust difficulty.
-# On larger grids the agent has more room to manoeuvre before the opponent closes in.
 OPP_START_X_FROM_GOAL = 1  # columns left of goal where opponent starts
 OPP_MOVE_EVERY = 2         # opponent moves 1 cell every N agent steps (1 = every step)
+
+# Level 5 — cooperative play with teammate
+# Opponent starts mid-field on the goal row, blocking the direct dribble path.
+# Teammate starts top-left and positions itself to receive passes.
+OPP_START_X_L5 = 6         # column — blocks goal row mid-field
+OPP_START_Y_L5 = 3         # row   — same as goal row (GRID_HEIGHT // 2)
+TM_START_X_L5  = 5         # teammate column
+TM_START_Y_L5  = 0         # teammate row (top)
+PASS_SPEED_L5  = 2          # cells the ball travels per step while in flight
+
+# Rewards — Level 5
+REWARD_GOAL_L5      = 70   # goal scored (agent shoots OR teammate scores)
+REWARD_PASS_SUCCESS = 15   # teammate picks up the passed ball
+REWARD_BAD_SHOT_L5  = -5   # shoot/pass without ball
+
+# Level X (6) — two opponents + teammate (state space explosion vs. Q-Table)
+# Opp1 starts near goal (ball-chaser like L3).
+# Opp2 starts mid-field (agent-presser — tackles when agent carries ball).
+# Teammate starts top mid-field, positions to receive passes.
+OPP1_START_X_LX = 8
+OPP1_START_Y_LX = 0
+OPP2_START_X_LX = 4
+OPP2_START_Y_LX = 5
+TM_START_X_LX   = 5
+TM_START_Y_LX   = 0
+PASS_SPEED_LX   = 2
+
+# Rewards — Level X
+REWARD_GOAL_LX         = 80
+REWARD_BAD_SHOT_LX     = -5
+REWARD_PASS_SUCCESS_LX = 15
 
 # Q-Learning
 Q_LR = 0.1

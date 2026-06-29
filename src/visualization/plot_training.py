@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import config
 
 
-def _rolling(values, window=100):
+def _rolling(values, window=50):
     """Simple rolling mean; pads early episodes with expanding window."""
     result = []
     for i in range(len(values)):
@@ -22,7 +22,7 @@ def _load_log(log_path):
         return json.load(f)
 
 
-def plot_training(log_path, title=None, save_path=None, window=100):
+def plot_training(log_path, title=None, save_path=None, window=50):
     """
     Three-panel training overview for a single agent:
       1. Episode reward + rolling mean
@@ -87,7 +87,7 @@ def plot_training(log_path, title=None, save_path=None, window=100):
     plt.close()
 
 
-def plot_comparison(q_log_path, dqn_log_path, level=None, save_path=None, window=100):
+def plot_comparison(q_log_path, dqn_log_path, level=None, save_path=None, window=50):
     """
     Side-by-side comparison of Q-Table vs DQN:
       1. Rolling average reward

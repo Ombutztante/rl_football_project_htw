@@ -34,9 +34,9 @@ python -m pytest tests/test_environment.py
 jupyter notebook notebooks/experiments.ipynb
 ```
 
-## Game Design: Three Levels of Complexity
+## Game Design: Five Levels of Complexity
 
-The environment is a 2D grid (default 6×4, configured in `config.py`). Complexity grows across three levels, each adding to the previous. **All levels share the same 5 actions** so agent code stays clean across levels. Levels are trained independently (no progressive transfer).
+The environment is a 2D grid (default 10×6, configured in `config.py`). Complexity grows across five levels, each adding to the previous. **All levels share the same 5 actions** so agent code stays clean across levels. Levels are trained independently (no progressive transfer).
 
 **Actions (all levels):** 0=up, 1=down, 2=left, 3=right, 4=shoot
 
@@ -95,7 +95,67 @@ A dynamic opponent is added that moves 1 field toward the ball every 2nd turn. I
 
 ---
 
-The active level is set via `config.py` (`LEVEL = 1 | 2 | 3`).
+**Level 4 — Static obstacle blocks direct path (extends Level 3)**
+
+A vertical obstacle wall is added at column `OBSTACLE_X=6`, blocking rows 0–3. Rows 4–5 remain free for navigation below. Shots that hit the obstacle are blocked; the agent must navigate around the obstacle or shoot from a different angle.
+
+- State: `(agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y)` — 7 elements (same as Level 3)
+- Obstacle: static, `OBSTACLE_X=6`, rows `OBSTACLE_Y_START=0` to `OBSTACLE_Y_START + OBSTACLE_HEIGHT - 1=3`
+- Rewards:
+  - `+60` goal scored
+  - `+5` ball picked up
+  - `+2` ball moved closer to goal via pass
+  - `+1` moved closer to goal
+  - `-1` per step
+  - `-2` agent walks into obstacle
+  - `-5` shot blocked by obstacle
+  - `-10` opponent reaches ball
+  - `-20` ball lost to opponent
+
+---
+
+**Level 5 — Cooperative play with teammate (extends Level 3, no obstacle)**
+
+A rule-based teammate is added. The opponent starts mid-field blocking the direct dribble path. The agent must cooperate: action 4 outside the shooting zone passes the ball diagonally toward the teammate (ball travels `PASS_SPEED_L5=2` cells per step while visible on the field); inside the shooting zone it shoots directly (Level-1 style). The teammate positions itself to receive passes and then dribbles autonomously to score.
+
+- State: `(agent_x, agent_y, ball_x, ball_y, has_ball, opp_x, opp_y, tm_x, tm_y, tm_has_ball)` — 10 elements
+- Opponent: starts at `(OPP_START_X_L5=6, OPP_START_Y_L5=3)`, blocking the centre path
+- Teammate: starts at `(TM_START_X_L5=5, TM_START_Y_L5=0)`, moves toward ball or receiving position
+- Pass mechanic: ball travels diagonally (both x and y per step) — avoids Manhattan path that would go through the opponent
+- Rewards:
+  - `+70` goal scored (agent shoots OR teammate scores)
+  - `+15` teammate picks up the passed ball
+  - `+5` ball picked up
+  - `+1` moved closer to goal
+  - `-1` per step
+  - `-5` shoot/pass without ball
+  - `-10` opponent reaches ball
+  - `-20` ball lost to opponent
+
+---
+
+**Level X (6) — Two opponents + teammate (state space explosion)**
+
+Designed to push Q-Table to its limits and highlight DQN's generalisation advantage. Two independent opponents create a combinatorial state space (~1M+ states) that the Q-Table cannot explore within the training budget. DQN generalises across similar states via the neural network's shared weights.
+
+- State: `(agent_x, agent_y, ball_x, ball_y, has_ball, opp1_x, opp1_y, opp2_x, opp2_y, tm_x, tm_y, tm_has_ball)` — 12 elements
+- **Opp1** starts at `(OPP1_START_X_LX=8, 0)`, chases ball every `OPP_MOVE_EVERY` steps (like Level 3)
+- **Opp2** starts at `(OPP2_START_X_LX=4, 5)`, presses agent — tackles and ends episode if it reaches the agent who has the ball
+- **Teammate** starts at `(TM_START_X_LX=5, 0)`, positions to receive passes and scores autonomously (same as Level 5)
+- Pass mechanic: diagonal ball-in-flight pass outside shooting zone; direct shot inside shooting zone (same as Level 5)
+- Rewards:
+  - `+80` goal scored (agent shoots OR teammate scores)
+  - `+15` teammate picks up passed ball
+  - `+5` ball picked up
+  - `+1` moved closer to goal
+  - `-1` per step
+  - `-5` shoot/pass without ball
+  - `-10` opp1 reaches loose ball
+  - `-20` ball lost to opponent (tackle)
+
+---
+
+The active level is set via `config.py` (`LEVEL = 1 | 2 | 3 | 4 | 5 | 6`).
 
 ## Architecture
 
@@ -133,8 +193,12 @@ agent.learn(state, action, reward, next_state)
 
 **Agent vs. DQN state representation:** The Q-table uses the raw state tuple as key (no normalization needed). The DQN uses a normalized float array (`env.state_to_array(state)`), which also includes the fixed goal position (as per spec). `env.get_state_size()` returns the DQN input dimension.
 
-**DQN input (per spec):** player x/y, ball x/y, has_ball, goal x/y, opponent x/y (stage 3). All coordinates normalized to [0, 1].
+**DQN input (normalised float array, all coordinates divided by grid size − 1):**
+- Level 1+2 (7 values):  ax, ay, bx, by, has_ball, gx, gy
+- Level 3+4 (9 values):  + opp_x, opp_y
+- Level 5   (12 values): + opp_x, opp_y, tm_x, tm_y, tm_has_ball
+- Level 6   (14 values): + opp1_x, opp1_y, opp2_x, opp2_y, tm_x, tm_y, tm_has_ball
 
 **Algorithm decision:** Q-Table is the baseline (close to lecture content, reliable and stable on small grids). DQN is the extension — it converges comparably on Level 1+2, but shows characteristic instability on Level 3 (Q-value drift after ε reaches minimum), demonstrating where tabular methods are actually more robust.
 
-**n_actions is always 5** across all levels (up, down, left, right, shoot). The meaning of `shoot` expands per level: Level 1 = score if in shooting zone; Level 2 = forward pass (ball travels ahead, agent chases); Level 3 = same as Level 2 with opponent pressure.
+**n_actions is always 5** across all levels (up, down, left, right, shoot). The meaning of `shoot` expands per level: Level 1 = score if in shooting zone; Level 2/3/4 = forward pass (ball travels `SHOOT_RANGE` cells right, agent chases); Level 5 = pass to teammate (ball travels diagonally, `PASS_SPEED_L5` cells/step) or direct shot if in shooting zone.
