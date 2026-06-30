@@ -29,7 +29,9 @@ BALL_START_X_LX = 1
 # Rewards — shared across all levels
 REWARD_STEP = -1           # every step
 REWARD_BALL_PICKUP = 5     # picking up the ball
-REWARD_CLOSER = 1          # moved closer to goal (shaping, movement actions)
+REWARD_CLOSER = 1          # moved closer to goal WITH ball (shaping)
+REWARD_CLOSER_NO_BALL = 0.5  # moved closer to goal WITHOUT ball (weaker shaping, e.g. chasing after pass)
+REWARD_WALL = -1           # agent tries to move out of bounds (all levels)
 
 # Rewards — Level 1
 REWARD_GOAL = 30             # goal scored via shoot from zone (aligned with goal row)
@@ -53,19 +55,20 @@ REWARD_BALL_LOST = -20     # opponent tackles agent who has ball → episode end
 
 # Level 4 — static obstacle (vertical wall, 1 column wide, 4 rows tall)
 # Rows 0–3 at column 6 are blocked; rows 4–5 are free to pass around below.
+# (L4-easy experiment with height=2 is in results/opt_iter6_2906/)
 OBSTACLE_X       = 6  # column of the obstacle
 OBSTACLE_Y_START = 0  # first blocked row (0 = top)
-OBSTACLE_HEIGHT  = 4  # number of blocked rows
+OBSTACLE_HEIGHT  = 4  # number of blocked rows (standard L4)
 
 # Rewards — Level 4 (extends Level 3 + obstacle)
 REWARD_GOAL_L4         = 60  # goal scored (harder than L3, so higher reward)
 REWARD_HIT_OBSTACLE    = -2  # agent walks into obstacle wall
 REWARD_SHOT_BLOCKED    = -5  # shot intercepted by obstacle
-REWARD_BYPASS_OBSTACLE =  2  # agent carries ball through free corridor (y >= OBSTACLE_HEIGHT) past obstacle
+REWARD_BYPASS_OBSTACLE =  8  # agent carries ball through free corridor (y >= OBSTACLE_HEIGHT) past obstacle
 
-# DQN Level 4 — slower epsilon decay so the agent explores long enough to find the detour
-# With decay=0.995 epsilon reaches 0.05 at ~ep600, too early for a multi-step obstacle bypass.
-# With decay=0.998 epsilon reaches 0.05 at ~ep1800, giving enough exploration on 2000 episodes.
+# DQN Level 4 — standard epsilon decay (0.995) so the agent can exploit bypass paths early.
+# Slow decay (0.998) was counterproductive: DQN found 1.2% goal rate at ep1000 (ε=0.135)
+# but then couldn't exploit it. Standard decay reaches ε=0.05 at ep~600 → more exploitation.
 DQN_EPSILON_DECAY_L4 = 0.998
 
 # Level 3/4 opponent
@@ -113,15 +116,15 @@ Q_EPSILON_MIN = 0.05
 Q_EPSILON_DECAY = 0.995
 
 # DQN (PyTorch)
-DQN_LR = 1e-4              # 1e-3 caused Q-value explosion; 1e-4 is more stable
+DQN_LR = 1e-4              # reverted from 5e-5 (Iter3 regression): 5e-5 too slow for 1000-ep runs
 DQN_GAMMA = 0.99
 DQN_EPSILON_START = 1.0
 DQN_EPSILON_MIN = 0.05
 DQN_EPSILON_DECAY = 0.995
 BATCH_SIZE = 64
-MEMORY_SIZE = 15000        # slightly larger buffer keeps diverse experiences longer
+MEMORY_SIZE = 15000        # reverted from 20000 (Iter4 slight regression): 15000 optimal for 3000-ep runs
 TAU = 0.005                # soft target update factor: target = τ·online + (1-τ)·target
-REPLAY_WARMUP = 500        # minimum buffer size before learning starts
+REPLAY_WARMUP = 500        # reverted from 800 (Iter3 regression): 800 leaves too few steps at ep1000
 GRAD_CLIP_NORM = 1.0       # max gradient norm for clipping
 HIDDEN_SIZE = 128
 

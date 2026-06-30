@@ -1,0 +1,106 @@
+{
+  "iteration": 4,
+  "run": "opt_iter4_2906",
+  "results": {
+    "L1_ep1000": {
+      "qtable": {
+        "goal_rate_pct": 100.0,
+        "avg_reward": 36.1
+      },
+      "dqn": {
+        "goal_rate_pct": 89.0,
+        "avg_reward": 74.9
+      }
+    },
+    "L2_ep1000": {
+      "qtable": {
+        "goal_rate_pct": 100.0,
+        "avg_reward": 43.4
+      },
+      "dqn": {
+        "goal_rate_pct": 100.0,
+        "avg_reward": 41.8
+      }
+    },
+    "L3_ep1000": {
+      "qtable": {
+        "goal_rate_pct": 84.0,
+        "avg_reward": 42.4
+      },
+      "dqn": {
+        "goal_rate_pct": 85.0,
+        "avg_reward": 42.5
+      }
+    },
+    "L4_ep1000": {
+      "qtable": {
+        "goal_rate_pct": 85.0,
+        "avg_reward": 56.2
+      },
+      "dqn": {
+        "goal_rate_pct": 0.0,
+        "avg_reward": -20.6
+      }
+    },
+    "L5_ep1000": {
+      "qtable": {
+        "goal_rate_pct": 100.0,
+        "avg_reward": 82.8
+      },
+      "dqn": {
+        "goal_rate_pct": 98.0,
+        "avg_reward": 80.0
+      }
+    },
+    "L1_ep3000": {
+      "qtable": {
+        "goal_rate_pct": 91.0,
+        "avg_reward": 78.8
+      },
+      "dqn": {
+        "goal_rate_pct": 81.0,
+        "avg_reward": 60.9
+      }
+    },
+    "L2_ep3000": {
+      "qtable": {
+        "goal_rate_pct": 100.0,
+        "avg_reward": 43.4
+      },
+      "dqn": {
+        "goal_rate_pct": 100.0,
+        "avg_reward": 44.0
+      }
+    },
+    "L3_ep3000": {
+      "qtable": {
+        "goal_rate_pct": 97.0,
+        "avg_reward": 51.3
+      },
+      "dqn": {
+        "goal_rate_pct": 88.0,
+        "avg_reward": 43.3
+      }
+    },
+    "L4_ep3000": {
+      "qtable": {
+        "goal_rate_pct": 93.0,
+        "avg_reward": 64.4
+      },
+      "dqn": {
+        "goal_rate_pct": 0.0,
+        "avg_reward": -14.8
+      }
+    },
+    "L5_ep3000": {
+      "qtable": {
+        "goal_rate_pct": 99.0,
+        "avg_reward": 80.6
+      },
+      "dqn": {
+        "goal_rate_pct": 96.0,
+        "avg_reward": 81.0
+      }
+    }
+  }
+}

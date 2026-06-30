@@ -278,25 +278,38 @@ was auf kleinen Grids mehr schadet als hilft.
 
 | Eigenschaft | Q-Table gewinnt | DQN gewinnt |
 |---|---|---|
-| Zustandsraumgröße | Klein (< ~50.000) | Groß (> 100.000) |
+| Zustandsraumgröße | Klein (< ~50.000 relevante States) | Groß — Generalisierung hilft |
 | Reward-Dichte | Spärlich OK | Braucht dichte Signale |
-| Konvergenzgeschwindigkeit | Schneller | Langsamer, braucht Warmup |
-| Stabilität nach Konvergenz | Sehr stabil | Kann driften |
+| Konvergenzgeschwindigkeit | Schneller bei kleinem Raum | Schneller bei großem Raum |
+| Stabilität nach Konvergenz | Sehr stabil | Kann driften (Q-Value-Drift) |
 | Generalisierung | Keine | Funktioniert auf ungesehenen States |
 | Räumliche Constraints | Robust (exakte Grenzen) | Schwächer (approximiert Grenzen) |
 
-**Fazit für dieses Projekt:**
-Die Level 1–4 auf dem 10×6-Grid sind noch im "Q-Table-Vorteilsbereich".
-DQN würde seinen Vorteil erst bei deutlich größeren Grids (≥ 15×10)
-oder zusätzlicher Komplexität (zufällige Ball-Starts, mehrere Gegner) ausspielen.
+**Fazit für dieses Projekt (aktualisiert nach L6-Ergebnissen, 2026-06-29):**
+
+Die Level 1–5 auf dem 10×6-Grid liegen im "Q-Table-Vorteilsbereich": beide Agenten
+lösen die Level vergleichbar gut, Q-Table konvergiert stabiler.
+
+Level 6 (zwei Gegner + Mitspieler) zeigt erstmals den **DQN-Generalisierungsvorteil**:
+- ep1000: DQN **98%** vs. Q-Table **1%** — DQN konvergiert deutlich schneller
+- ep3000: Q-Table **94%** vs. DQN **90%** — Q-Table holt auf und bleibt stabiler
+
+Ursache: L6 hat einen effektiv größeren Zustandsraum (~1.170 relevante States vs ~930 bei ep1000).
+Q-Table muss alle States einzeln besuchen; DQN generalisiert über ähnliche Zustände hinweg.
+Der DQN-Vorteil liegt also nicht am Grid-Format, sondern an der Anzahl relevanter Zustände —
+die durch mehr Akteure (Gegner, Mitspieler) wächst, nicht zwingend durch ein größeres Grid.
+
+**Kein Algorithmus gewinnt immer.** Die Wahl hängt von Zustandsraumgröße und
+Stabilitätsanforderung ab. DQN ist schneller wenn der Raum groß ist, aber strukturell
+anfälliger für Q-Value-Drift. Q-Table ist langsamer beim Anfahren, aber nach Konvergenz
+vollständig stabil.
 
 ---
 
-## Offene Optimierungsaufgaben
+## Abgeschlossene Optimierungsaufgaben
 
 - [x] DQN Level 1: Reward Shaping + 2D Schusszone implementiert (18.06.2026)
-- [x] DQN Level 4: Langsameren Epsilon-Decay + mehr Episoden getestet → 0%, strukturelles Versagen (18.06.2026)
-- [ ] DQN Level 4: Curriculum Learning (L3 → L4) evaluieren (optional)
-- [ ] Separate Hyperparameter-Sets pro Level (aktuell: alle Level gleiche Config)
-- [ ] Double DQN implementieren (reduziert Overestimation Bias)
-- [ ] Level 5 oder größeres Grid für DQN-Vorteil-Demonstration
+- [x] DQN Level 4: Epsilon-Decay + mehr Episoden getestet → 0%, strukturelles Sparse-Reward-Versagen (18.06.2026)
+- [x] DQN Level 4: Sparse-Reward-Hypothese bestätigt — OBSTACLE_HEIGHT=2 → DQN 89%/93% (29.06.2026, opt_iter6)
+- [x] DQN Level 5: Epsilon-Decay-Bug gefixt (`>= 4` → `== 4`) → 0% → 97%/99% (29.06.2026, opt_iter1)
+- [x] Level 6 Erstlauf durchgeführt — zeigt DQN-Generalisierungsvorteil (29.06.2026, opt_iter7)

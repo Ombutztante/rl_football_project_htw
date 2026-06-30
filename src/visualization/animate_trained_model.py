@@ -43,6 +43,7 @@ C = {
     "pball":     "#CE93D8",
     "ball":      "#FF8A65",
     "opp":       "#EF5350",
+    "opp2":      "#9C27B0",
     "teammate":  "#81C784",
     "tm_pball":  "#A5D6A7",
     "border":    "#2A3A6A",
@@ -188,8 +189,8 @@ def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done
     # Two opponents (Level 6)
     if env.level == 6:
         for opos, lbl, fc, edge in [
-                (env.opp1_pos, "X", C["opp"],   "#7B0000"),
-                (env.opp2_pos, "Y", "#9C27B0", "#4A0070")]:
+                (env.opp1_pos, "X", C["opp"],  "#7B0000"),
+                (env.opp2_pos, "Y", C["opp2"], "#4A0070")]:
             ox, oy = opos
             if 0 <= ox < W and 0 <= oy < H:
                 ody = H - 1 - oy
@@ -262,8 +263,8 @@ def render_frame(env, action=None, step_reward=0, total_reward=0, label="", done
         handles.append(mpatches.Patch(facecolor=C["teammate"], label="Mitspieler (T)"))
         handles.append(mpatches.Patch(facecolor=C["tm_pball"], label="Mitspieler+Ball (M)"))
     if env.level == 6:
-        handles.append(mpatches.Patch(facecolor=C["opp"],  label="Gegner 1 – Ball (X)"))
-        handles.append(mpatches.Patch(facecolor="#9C27B0", label="Gegner 2 – Press (Y)"))
+        handles.append(mpatches.Patch(facecolor=C["opp"],  label="Gegner 1 (X)"))
+        handles.append(mpatches.Patch(facecolor=C["opp2"], label="Gegner 2 (Y)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=len(handles),
               bbox_to_anchor=(0.5, -0.12), framealpha=0.92, edgecolor=C["border"])
 

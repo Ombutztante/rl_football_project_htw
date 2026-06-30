@@ -13,16 +13,9 @@ from src.dqn_agent import DQNAgent
 
 def train(n_snapshots=10):
     env = FootballEnv(level=config.LEVEL)
-    # Level 4 uses a slower epsilon decay to allow enough exploration for the obstacle detour
-    epsilon_decay = (
-        config.DQN_EPSILON_DECAY_L4
-        if config.LEVEL >= 4 and hasattr(config, "DQN_EPSILON_DECAY_L4")
-        else None
-    )
     agent = DQNAgent(
         state_size=env.get_state_size(),
         n_actions=env.n_actions,
-        epsilon_decay=epsilon_decay,
     )
 
     os.makedirs(config.MODELS_DIR, exist_ok=True)

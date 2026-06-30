@@ -110,6 +110,7 @@ class FootballEnv:
         self.done = False
         self.step_count = 0
         self.ball_pickup_rewarded = False  # ensures pickup reward fires only once per episode
+        self.bypass_rewarded = False       # ensures L4 obstacle-bypass reward fires only once
 
         if self.level >= 3 and self.level != 5:
             opp_x = self.goal_pos[0] - config.OPP_START_X_FROM_GOAL
@@ -136,10 +137,17 @@ class FootballEnv:
         """
         Apply action and return (next_state, reward, done).
 
+        Iteration 1 reward changes vs. baseline:
+            - REWARD_WALL (-2): penalty when agent tries to move out of bounds (all levels)
+            - REWARD_CLOSER (+1): now only fires when agent HAS the ball
+            - REWARD_BYPASS_OBSTACLE (+2): now actually implemented; fires once per episode
+              when agent carries ball through the free corridor past the obstacle (L4)
+
         Level 1 reward structure:
             -1   every step
-            +5   ball picked up
-            +1   moved closer to goal (shaping)
+            -2   agent hits boundary wall (new)
+            +5   ball picked up (once per episode)
+            +1   moved closer to goal WITH ball (shaping)
             +1   agent has ball and is on goal row (alignment shaping)
             +30  goal scored via shoot from zone (aligned with goal row)
             -3   shoot in zone but wrong row
@@ -148,8 +156,9 @@ class FootballEnv:
 
         Level 2 reward structure:
             -1   every step
+            -2   agent hits boundary wall (new)
             +5   ball picked up
-            +1   moved closer to goal (shaping, movement only)
+            +1   moved closer to goal WITH ball (shaping)
             +40  goal scored (dribble to goal OR pass landing on goal)
             +2   ball advanced toward goal via forward pass
             -5   ball exits right wall without scoring
@@ -157,8 +166,9 @@ class FootballEnv:
 
         Level 3 reward structure (same mechanics as Level 2 + opponent):
             -1   every step
+            -2   agent hits boundary wall (new)
             +5   ball picked up
-            +1   moved closer to goal (shaping, movement only)
+            +1   moved closer to goal WITH ball (shaping)
             +50  goal scored (dribble to goal OR pass landing on goal)
             +2   ball advanced toward goal via forward pass
             -5   ball exits right wall without scoring
@@ -169,6 +179,7 @@ class FootballEnv:
         Level 4 adds on top of Level 3:
             -2   agent walks into obstacle wall
             -5   forward pass blocked by obstacle
+            +8   agent carries ball through free corridor past obstacle (once per episode)
             +60  goal scored
         """
         if self.done:
@@ -183,14 +194,21 @@ class FootballEnv:
             prev_dist = self._dist_to_goal()
 
             dx, dy = self._DELTA[action]
-            new_x = int(np.clip(self.agent_pos[0] + dx, 0, self.width - 1))
-            new_y = int(np.clip(self.agent_pos[1] + dy, 0, self.height - 1))
+            raw_x = self.agent_pos[0] + dx
+            raw_y = self.agent_pos[1] + dy
+            new_x = int(np.clip(raw_x, 0, self.width - 1))
+            new_y = int(np.clip(raw_y, 0, self.height - 1))
+
+            # Detect whether the move would go out of bounds (wall collision)
+            hit_wall = (raw_x != new_x) or (raw_y != new_y)
 
             if self.level == 4 and (new_x, new_y) in self.obstacle_cells:
                 reward += config.REWARD_HIT_OBSTACLE  # blocked, agent stays in place
             else:
                 self.agent_pos[0] = new_x
                 self.agent_pos[1] = new_y
+                if hit_wall:
+                    reward += config.REWARD_WALL  # -2 for hitting boundary wall
 
             # Ball follows agent when carried
             if self.has_ball:
@@ -205,9 +223,12 @@ class FootballEnv:
                     reward += config.REWARD_BALL_PICKUP  # +5
                     self.ball_pickup_rewarded = True
 
-            # Shaping: reward progress toward goal
+            # Shaping: reward progress toward goal (stronger with ball, weaker without)
             if self._dist_to_goal() < prev_dist:
-                reward += config.REWARD_CLOSER  # +1
+                if self.has_ball:
+                    reward += config.REWARD_CLOSER          # +1
+                else:
+                    reward += config.REWARD_CLOSER_NO_BALL  # +0.5
 
             # Level 1: reward for carrying ball on the goal row
             if self.level == 1 and self.has_ball and self.agent_pos[1] == self.goal_pos[1]:
@@ -223,6 +244,15 @@ class FootballEnv:
                     goal_reward = config.REWARD_GOAL_L2
                 reward += goal_reward
                 self.done = True
+
+            # Level 4: reward agent for carrying ball through the free corridor past obstacle
+            # Fires once per episode to guide DQN past the obstacle toward the goal
+            if self.level == 4 and self.has_ball and not self.bypass_rewarded:
+                if (self.agent_pos[0] > config.OBSTACLE_X and
+                        self.agent_pos[1] >= config.OBSTACLE_HEIGHT):
+                    reward += config.REWARD_BYPASS_OBSTACLE
+                    self.bypass_rewarded = True
+
 
         # Level 5: advance ball in flight, then teammate moves
         if self.level == 5 and not self.done:
