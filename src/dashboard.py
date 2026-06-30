@@ -487,7 +487,7 @@ def main():
                  color=C["text"], y=0.995)
 
     # ── Sidebar: Level selector ───────────────────────────────────────────
-    ax_lv = fig.add_axes([0.01, 0.52, 0.12, 0.41], facecolor=C["cell"])
+    ax_lv = fig.add_axes([0.01, 0.54, 0.12, 0.39], facecolor=C["cell"])
     ax_lv.set_title("Level", fontsize=9, pad=4, color=C["text"])
     radio_lv = RadioButtons(
         ax_lv,
@@ -497,20 +497,19 @@ def main():
         lb.set_color(C["text"]); lb.set_fontsize(9)
 
     # ── Sidebar: Level description ────────────────────────────────────────
-    ax_desc = fig.add_axes([0.01, 0.38, 0.12, 0.13], facecolor="#0D1117")
+    ax_desc = fig.add_axes([0.01, 0.40, 0.12, 0.12], facecolor="#0D1117")
     ax_desc.axis("off")
     desc_text = ax_desc.text(
-        0.5, 0.55, LEVEL_DESC.get(s.level, ""),
-        ha="center", va="center", fontsize=7.2, color=C["text_dim"],
-        wrap=True, transform=ax_desc.transAxes,
-        multialignment="center")
+        0.5, 0.5, LEVEL_DESC.get(s.level, ""),
+        ha="center", va="center", fontsize=7.0, color=C["text_dim"],
+        transform=ax_desc.transAxes, multialignment="center")
 
     def _update_desc(level):
         desc_text.set_text(LEVEL_DESC.get(level, ""))
         fig.canvas.draw_idle()
 
     # ── Sidebar: Kontext-Titel ────────────────────────────────────────────
-    ax_ctx_lbl = fig.add_axes([0.01, 0.35, 0.12, 0.04])
+    ax_ctx_lbl = fig.add_axes([0.01, 0.36, 0.12, 0.04])
     ax_ctx_lbl.axis("off")
     ax_ctx_lbl.set_facecolor(C["bg"])
     ctx_title = ax_ctx_lbl.text(0.5, 0.5, "Agent", ha="center", va="center",
@@ -518,7 +517,7 @@ def main():
                                 transform=ax_ctx_lbl.transAxes)
 
     # ── Sidebar: 4 Kontext-Buttons ────────────────────────────────────────
-    CTX_Y = [0.25, 0.16, 0.07, -0.02]
+    CTX_Y = [0.26, 0.17, 0.08, -0.01]
     ctx_axes = []
     ctx_btns = []
     for y in CTX_Y:
@@ -549,10 +548,10 @@ def main():
 
     # ── Mode tabs ─────────────────────────────────────────────────────────
     TAB_DEFS = [
-        ("▶  Live Play",    MODE_LIVE),
-        ("🎞  Agent GIF",   MODE_AGENT),
-        ("⚔  Vergleich",   MODE_COMPARE),
-        ("📊  Plots",       MODE_PLOTS),
+        ("Live Play",  MODE_LIVE),
+        ("Agent GIF",  MODE_AGENT),
+        ("Vergleich",  MODE_COMPARE),
+        ("Plots",      MODE_PLOTS),
     ]
     tab_axes = []
     tab_btns = []
@@ -599,8 +598,8 @@ def main():
     ax_img = fig.add_axes([0.16, 0.10, 0.82, 0.80], facecolor=C["bg"])
     ax_gp  = fig.add_axes([0.16, 0.02, 0.13, 0.06])
     ax_gr  = fig.add_axes([0.31, 0.02, 0.13, 0.06])
-    btn_gp = Button(ax_gp, "⏸ Pause",    color="#166534", hovercolor="#14532D")
-    btn_gr = Button(ax_gr, "↺ Neustart", color="#7F1D1D", hovercolor="#991B1B")
+    btn_gp = Button(ax_gp, "|| Pause",   color="#166534", hovercolor="#14532D")
+    btn_gr = Button(ax_gr, "<< Neustart", color="#7F1D1D", hovercolor="#991B1B")
     for b in (btn_gp, btn_gr):
         b.label.set_color(C["text"])
         b.label.set_fontsize(10)
@@ -691,7 +690,7 @@ def main():
             ax_img.set_visible(True)
             for ax in GIF_CTRL: ax.set_visible(True)
             s.reload_gif()
-            btn_gp.label.set_text("⏸ Pause")
+            btn_gp.label.set_text("|| Pause")
 
         elif mode == MODE_PLOTS:
             for ax in LIVE_AXES: ax.set_visible(False)
@@ -783,13 +782,13 @@ def main():
     # ── GIF button callbacks ───────────────────────────────────────────────
     def on_gif_play(e):
         s.gif_play = not s.gif_play
-        btn_gp.label.set_text("⏸ Pause" if s.gif_play else "▶ Play")
+        btn_gp.label.set_text("|| Pause" if s.gif_play else "> Play")
 
     def on_gif_reset(e):
         s.gif_idx  = 0
         s.gif_t    = time.time()
         s.gif_play = True
-        btn_gp.label.set_text("⏸ Pause")
+        btn_gp.label.set_text("|| Pause")
         refresh()
 
     btn_gp.on_clicked(on_gif_play)
