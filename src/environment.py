@@ -111,6 +111,7 @@ class FootballEnv:
         self.step_count = 0
         self.ball_pickup_rewarded = False  # ensures pickup reward fires only once per episode
         self.bypass_rewarded = False       # ensures L4 obstacle-bypass reward fires only once
+        self.goal_row_rewarded = False     # ensures L1 goal-row alignment reward fires only once
 
         if self.level >= 3 and self.level != 5:
             opp_x = self.goal_pos[0] - config.OPP_START_X_FROM_GOAL
@@ -230,9 +231,11 @@ class FootballEnv:
                 else:
                     reward += config.REWARD_CLOSER_NO_BALL  # +0.5
 
-            # Level 1: reward for carrying ball on the goal row
+            # Level 1: reward for carrying ball on the goal row (once per episode)
             if self.level == 1 and self.has_ball and self.agent_pos[1] == self.goal_pos[1]:
-                reward += config.REWARD_GOAL_ROW_ALIGN  # +1
+                if not self.goal_row_rewarded:
+                    reward += config.REWARD_GOAL_ROW_ALIGN  # +1
+                    self.goal_row_rewarded = True
 
             # Level 2–4: agent dribbles ball into goal cell → score
             if 2 <= self.level <= 4 and self.has_ball and self.agent_pos == list(self.goal_pos):

@@ -31,7 +31,7 @@ from src.dqn_agent import DQNAgent
 
 ACTION_NAMES = ["Hoch", "Runter", "Links", "Rechts", "Schuss"]
 MODE_LIVE    = "live"
-MODE_AGENT   = "agent"
+MODE_TRAIN   = "train"
 MODE_COMPARE = "compare"
 MODE_PLOTS   = "plots"
 
@@ -71,7 +71,7 @@ C = {
 
 CTX = {
     MODE_LIVE:    {"title": "Agent",    "opts": ["Q-Table", "DQN", "", ""]},
-    MODE_AGENT:   {"title": "Agent",    "opts": ["Q-Table", "DQN", "", ""]},
+    MODE_TRAIN:   {"title": "Agent",    "opts": ["Q-Table", "DQN", "", ""]},
     MODE_COMPARE: {"title": "",         "opts": ["", "", "", ""]},
     MODE_PLOTS:   {"title": "Plot-Typ", "opts": ["Q-Table", "DQN", "Vergleich", "Übersicht"]},
 }
@@ -88,17 +88,20 @@ def _find_file(pattern):
     return max(files, key=_key)
 
 
+_EXCLUDED_DIRS = {"old", "opt_iter6_2906"}
+
 def _find_across_runs(filename_pattern):
     """Search for a file matching filename_pattern across all results subdirs.
-    filename_pattern may contain {level} and {agent} placeholders already filled.
+    Excludes legacy (results/old/) and discarded experiment (opt_iter6_2906) dirs.
     Returns the path with the highest episode count, preferring newer run dirs."""
     base = config.RESULTS_BASE
     candidates = []
     for root, dirs, files in os.walk(base):
-        dirs[:] = [d for d in dirs if "animations" in root or True]
+        # Prune excluded directories so os.walk won't descend into them
+        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
         for f in files:
             full = os.path.join(root, f)
-            if re.search(filename_pattern, f) and "_snapshots" not in f:
+            if re.search(filename_pattern + r"[^/]*$", f) and "_snapshots" not in f:
                 m = re.search(r"_ep(\d+)", f)
                 ep = int(m.group(1)) if m else 0
                 candidates.append((ep, os.path.getmtime(full), full))
@@ -111,6 +114,12 @@ def _find_across_runs(filename_pattern):
 def _find_animation(level, agent):
     """Find animation GIF for given level and agent across all run dirs."""
     pattern = rf"animation_{agent}_level{level}_ep\d+"
+    return _find_across_runs(pattern)
+
+
+def _find_training_evo(level, agent):
+    """Find training-evolution GIF for given level and agent across all run dirs."""
+    pattern = rf"training_evolution_{agent}_level{level}_ep\d+"
     return _find_across_runs(pattern)
 
 
@@ -159,10 +168,11 @@ def load_agent(level, agent_type):
 
 
 def _find_animation_model(level, prefix):
-    """Find model file across all run dirs (prefer highest ep count)."""
+    """Find model file across all run dirs (prefer highest ep count); excludes legacy dirs."""
     pattern = rf"{prefix}_level{level}_ep\d+\.(?:pkl|pt)$"
     candidates = []
     for root, dirs, files in os.walk(config.RESULTS_BASE):
+        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
         for f in files:
             if re.search(pattern, f) and "_snapshots" not in f:
                 full = os.path.join(root, f)
@@ -429,9 +439,9 @@ class State:
         self._reset_ep()
 
     def reload_gif(self):
-        if self.mode == MODE_AGENT:
+        if self.mode == MODE_TRAIN:
             ag   = self.agent_type
-            path = _find_animation(self.level, ag)
+            path = _find_training_evo(self.level, ag)
         elif self.mode == MODE_COMPARE:
             path = _find_compare_gif(self.level)
             if not path:
@@ -457,7 +467,7 @@ class State:
         else:
             self.gif_frames, self.gif_dur_ms = [], 333
             self.gif_path = None
-            ag = self.agent_type if self.mode == MODE_AGENT else "—"
+            ag = self.agent_type if self.mode == MODE_TRAIN else "—"
             print(f"[!] Kein GIF für Level {self.level} / {ag}")
         self.gif_idx  = 0
         self.gif_t    = time.time()
@@ -533,7 +543,7 @@ def main():
         title = CTX[mode]["title"]
         ctx_title.set_text(title)
         ax_ctx_lbl.set_visible(bool(title))
-        sel = s.agent_ctx_idx if mode in (MODE_LIVE, MODE_AGENT) else \
+        sel = s.agent_ctx_idx if mode in (MODE_LIVE, MODE_TRAIN) else \
               s.plot_ctx_idx  if mode == MODE_PLOTS else -1
         for i, (axt, btn) in enumerate(zip(ctx_axes, ctx_btns)):
             label = opts[i]
@@ -548,10 +558,10 @@ def main():
 
     # ── Mode tabs ─────────────────────────────────────────────────────────
     TAB_DEFS = [
-        ("Live Play",  MODE_LIVE),
-        ("Agent GIF",  MODE_AGENT),
-        ("Vergleich",  MODE_COMPARE),
-        ("Plots",      MODE_PLOTS),
+        ("Live Play",    MODE_LIVE),
+        ("Training Evo", MODE_TRAIN),
+        ("Vergleich",    MODE_COMPARE),
+        ("Plots",        MODE_PLOTS),
     ]
     tab_axes = []
     tab_btns = []
@@ -566,7 +576,7 @@ def main():
         tab_btns.append(btn)
 
     def _update_tabs():
-        order = [MODE_LIVE, MODE_AGENT, MODE_COMPARE, MODE_PLOTS]
+        order = [MODE_LIVE, MODE_TRAIN, MODE_COMPARE, MODE_PLOTS]
         for i, m in enumerate(order):
             col = C["tab_on"] if m == s.mode else C["tab_off"]
             tab_axes[i].set_facecolor(col)
@@ -626,8 +636,8 @@ def main():
             total = len(s.gif_frames)
             pct   = int((s.gif_idx + 1) / total * 100)
             ag    = "Q-Table" if s.agent_type == "qtable" else "DQN"
-            if s.mode == MODE_AGENT:
-                mode_label = f"Agent GIF — {ag}"
+            if s.mode == MODE_TRAIN:
+                mode_label = f"Training Evo — {ag}"
             else:
                 mode_label = "Vergleich"
             fname = os.path.basename(s.gif_path) if s.gif_path else ""
@@ -637,14 +647,16 @@ def main():
                 fontsize=8.5, color=C["text_dim"], pad=4)
         else:
             ag = "Q-Table" if s.agent_type == "qtable" else "DQN"
-            hint = (f"animation_{s.agent_type}_level{s.level}_ep*.gif"
-                    if s.mode == MODE_AGENT else
-                    f"compare_level{s.level}_ep*.gif")
+            if s.mode == MODE_TRAIN:
+                hint = f"training_evolution_{s.agent_type}_level{s.level}_ep*.gif"
+                gen_cmd = f"python src/visualization/animate_model_training.py --level {s.level} --agent {s.agent_type}"
+            else:
+                hint = f"compare_level{s.level}_ep*.gif"
+                gen_cmd = f"python src/visualization/animate_trained_model.py --level {s.level}"
             ax_img.text(0.5, 0.5,
                         f"Kein GIF gefunden für Level {s.level} / {ag}\n\n"
                         f"Erwarteter Dateiname: {hint}\n"
-                        f"Generieren mit: python src/visualization/animate_trained_model.py "
-                        f"--level {s.level}",
+                        f"Generieren mit: {gen_cmd}",
                         ha="center", va="center", transform=ax_img.transAxes,
                         fontsize=10, color=C["text_dim"])
 
@@ -683,7 +695,7 @@ def main():
             s.playing = False
             btn_play.label.set_text("Play")
 
-        elif mode in (MODE_AGENT, MODE_COMPARE):
+        elif mode in (MODE_TRAIN, MODE_COMPARE):
             for ax in LIVE_AXES: ax.set_visible(False)
             ax_spd.set_visible(True)
             ax_spd.set_xlabel("Abspielgeschw. (×)", fontsize=7.5, labelpad=1)
@@ -702,7 +714,7 @@ def main():
 
     # ── Tab callbacks ─────────────────────────────────────────────────────
     tab_btns[0].on_clicked(lambda e: set_mode(MODE_LIVE))
-    tab_btns[1].on_clicked(lambda e: set_mode(MODE_AGENT))
+    tab_btns[1].on_clicked(lambda e: set_mode(MODE_TRAIN))
     tab_btns[2].on_clicked(lambda e: set_mode(MODE_COMPARE))
     tab_btns[3].on_clicked(lambda e: set_mode(MODE_PLOTS))
 
@@ -714,7 +726,7 @@ def main():
         if s.mode == MODE_LIVE:
             s.reload_agent(level=lv)
             btn_play.label.set_text("Play")
-        elif s.mode in (MODE_AGENT, MODE_COMPARE):
+        elif s.mode in (MODE_TRAIN, MODE_COMPARE):
             s.reload_gif()
         refresh()
 
@@ -726,7 +738,7 @@ def main():
             opts = CTX[s.mode]["opts"]
             if not opts[i]:
                 return
-            if s.mode in (MODE_LIVE, MODE_AGENT):
+            if s.mode in (MODE_LIVE, MODE_TRAIN):
                 s.agent_ctx_idx = i
                 at = "qtable" if i == 0 else "dqn"
                 s.agent_type = at
@@ -807,7 +819,7 @@ def main():
                     _draw_live()
                     fig.canvas.draw_idle()
 
-        elif s.mode in (MODE_AGENT, MODE_COMPARE):
+        elif s.mode in (MODE_TRAIN, MODE_COMPARE):
             if s.gif_play and s.gif_frames:
                 now = time.time()
                 delay = (s.gif_dur_ms / 1000) / max(s.speed, 0.25)

@@ -9,9 +9,11 @@ import numpy as np
 import config
 from src.environment import FootballEnv
 from src.dqn_agent import DQNAgent
+from src.utils import set_seed
 
 
 def train(n_snapshots=10):
+    set_seed(42)
     env = FootballEnv(level=config.LEVEL)
     agent = DQNAgent(
         state_size=env.get_state_size(),

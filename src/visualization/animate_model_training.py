@@ -542,7 +542,16 @@ def main():
                     help="Episodenzahl des zu ladenden Snapshots (Standard: neuestes)")
     ap.add_argument("--fps",       type=int, default=3)
     ap.add_argument("--max-steps", type=int, default=40)
+    ap.add_argument("--run",       type=str, default=None,
+                    help="Run-Verzeichnis (z.B. 'opt_iter5_2906'). Standard: neuester Run.")
     args = ap.parse_args()
+
+    if args.run:
+        config.set_run_dir(args.run)
+    else:
+        run = config.latest_run()
+        if run:
+            config.set_run_dir(run)
 
     agent_label = "DQN" if args.agent == "dqn" else "Q-Table"
     print(f"\nTrainings-Animation: {agent_label}  —  Level {args.level}")
