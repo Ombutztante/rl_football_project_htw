@@ -2,10 +2,10 @@
 Interactive RL Football Dashboard
 
 Modi (Tabs oben):
-  Live Play     — Agent spielt live Schritt für Schritt
-  Training Evo  — Training-Evolution GIF abspielen
-  Vergleich     — Q-Table vs DQN Compare-GIF
-  Plots         — Trainingsplots anzeigen
+  Live Play  — Agent spielt live Schritt für Schritt
+  Agent GIF  — Animierter Spielzug des trainierten Agenten
+  Vergleich  — Q-Table vs DQN Compare-GIF / Plot
+  Plots      — Trainingsplots anzeigen
 
 python src/dashboard.py [--level 1] [--agent qtable]
 """
@@ -31,9 +31,18 @@ from src.dqn_agent import DQNAgent
 
 ACTION_NAMES = ["Hoch", "Runter", "Links", "Rechts", "Schuss"]
 MODE_LIVE    = "live"
-MODE_TRAIN   = "train"
+MODE_AGENT   = "agent"
 MODE_COMPARE = "compare"
 MODE_PLOTS   = "plots"
+
+LEVEL_DESC = {
+    1: "Ball holen → Schusszone → Tor\nAgent lernt situative Aktionswahl",
+    2: "Dribbling vs. Vorwärtspass\nEchte Entscheidung: sicher oder schnell?",
+    3: "Gegner bewegt sich alle 2 Züge\nDynamisches Hindernis, Zeitdruck",
+    4: "Statisches Hindernis (Spalte 6)\nUmweg durch freien Korridor (y≥4)",
+    5: "Mitspieler + Gegner auf Torreihe\nPass-Strategie oder Dribbling?",
+    6: "Zwei Gegner + Mitspieler\nGroßer Zustandsraum → DQN-Vorteil",
+}
 
 C = {
     "bg":        "#0F0F1A",
@@ -45,6 +54,7 @@ C = {
     "pball":     "#CE93D8",
     "ball":      "#FF8A65",
     "opp":       "#EF5350",
+    "opp2":      "#9C27B0",
     "teammate":  "#81C784",
     "tm_pball":  "#A5D6A7",
     "border":    "#2A3A6A",
@@ -55,19 +65,18 @@ C = {
     "neg":       "#EF5350",
     "tab_on":    "#1D4ED8",
     "tab_off":   "#1E2A4A",
-    "btn_sel":   "#1D4ED8",   # context button selected
-    "btn_unsel": "#1E2A4A",   # context button unselected
+    "btn_sel":   "#1D4ED8",
+    "btn_unsel": "#1E2A4A",
 }
 
-# Context options per mode
 CTX = {
     MODE_LIVE:    {"title": "Agent",    "opts": ["Q-Table", "DQN", "", ""]},
-    MODE_TRAIN:   {"title": "Agent",    "opts": ["Q-Table", "DQN", "", ""]},
+    MODE_AGENT:   {"title": "Agent",    "opts": ["Q-Table", "DQN", "", ""]},
     MODE_COMPARE: {"title": "",         "opts": ["", "", "", ""]},
     MODE_PLOTS:   {"title": "Plot-Typ", "opts": ["Q-Table", "DQN", "Vergleich", "Übersicht"]},
 }
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── File helpers ─────────────────────────────────────────────────────────────
 
 def _find_file(pattern):
     files = [f for f in glob.glob(pattern) if "_snapshots" not in f]
@@ -79,9 +88,55 @@ def _find_file(pattern):
     return max(files, key=_key)
 
 
+def _find_across_runs(filename_pattern):
+    """Search for a file matching filename_pattern across all results subdirs.
+    filename_pattern may contain {level} and {agent} placeholders already filled.
+    Returns the path with the highest episode count, preferring newer run dirs."""
+    base = config.RESULTS_BASE
+    candidates = []
+    for root, dirs, files in os.walk(base):
+        dirs[:] = [d for d in dirs if "animations" in root or True]
+        for f in files:
+            full = os.path.join(root, f)
+            if re.search(filename_pattern, f) and "_snapshots" not in f:
+                m = re.search(r"_ep(\d+)", f)
+                ep = int(m.group(1)) if m else 0
+                candidates.append((ep, os.path.getmtime(full), full))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return candidates[0][2]
+
+
+def _find_animation(level, agent):
+    """Find animation GIF for given level and agent across all run dirs."""
+    pattern = rf"animation_{agent}_level{level}_ep\d+"
+    return _find_across_runs(pattern)
+
+
+def _find_compare_gif(level):
+    """Find comparison GIF for given level across all run dirs."""
+    pattern = rf"compare_level{level}_ep\d+"
+    return _find_across_runs(pattern)
+
+
+def _find_plot(level, plot_type, prefer_ep=3000):
+    """Find the best matching training plot PNG across all run dirs."""
+    if plot_type == "summary":
+        p = os.path.join(config.RESULTS_BASE, "plots", "summary.png")
+        return p if os.path.exists(p) else None
+
+    prefix = {"qtable": "q_table", "dqn": "dqn", "comparison": "comparison"}.get(plot_type, plot_type)
+    pattern = rf"{prefix}_level{level}_ep\d+"
+    path = _find_across_runs(pattern)
+    return path
+
+
+# ── Agent loader ─────────────────────────────────────────────────────────────
+
 def load_agent(level, agent_type):
     if agent_type == "qtable":
-        path = _find_file(os.path.join(config.MODELS_DIR, f"q_table_level{level}_ep*.pkl"))
+        path = _find_animation_model(level, "q_table")
         if not path:
             print(f"[!] Kein Q-Table-Modell für Level {level}")
             return None, False
@@ -91,7 +146,7 @@ def load_agent(level, agent_type):
         print(f"[OK] Q-Table: {os.path.basename(path)}")
         return agent, False
     else:
-        path = _find_file(os.path.join(config.MODELS_DIR, f"dqn_level{level}_ep*.pt"))
+        path = _find_animation_model(level, "dqn")
         if not path:
             print(f"[!] Kein DQN-Modell für Level {level}")
             return None, True
@@ -101,6 +156,23 @@ def load_agent(level, agent_type):
         agent.epsilon = 0.0
         print(f"[OK] DQN: {os.path.basename(path)}")
         return agent, True
+
+
+def _find_animation_model(level, prefix):
+    """Find model file across all run dirs (prefer highest ep count)."""
+    pattern = rf"{prefix}_level{level}_ep\d+\.(?:pkl|pt)$"
+    candidates = []
+    for root, dirs, files in os.walk(config.RESULTS_BASE):
+        for f in files:
+            if re.search(pattern, f) and "_snapshots" not in f:
+                full = os.path.join(root, f)
+                m = re.search(r"_ep(\d+)", f)
+                ep = int(m.group(1)) if m else 0
+                candidates.append((ep, os.path.getmtime(full), full))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return candidates[0][2]
 
 
 def load_gif(path):
@@ -122,6 +194,7 @@ def load_png(path):
         return None
     return np.array(Image.open(path).convert("RGB"))
 
+
 # ── Grid drawing (Live Play) ─────────────────────────────────────────────────
 
 def draw_grid(ax, env, episode_count, total_reward, last_action, done):
@@ -139,7 +212,7 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
         for col in range(W):
             is_goal     = col == gx and row == gy
             is_zone     = env.level == 1 and env.shoot_zone_x <= col < W - 1
-            is_obstacle = env.level >= 4 and (col, row) in env.obstacle_cells
+            is_obstacle = env.level == 4 and (col, row) in env.obstacle_cells
             fc = (C["goal"] if is_goal else
                   C["obstacle"] if is_obstacle else
                   C["zone"] if is_zone else C["cell"])
@@ -183,18 +256,17 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
                     fontsize=13, fontweight="bold", color="white", zorder=5)
 
     if env.level == 6:
-        for opos, label_char, edge in [
-                (env.opp1_pos, "X", "#7B0000"),
-                (env.opp2_pos, "Y", "#4A0070")]:
+        for opos, lbl, fc, edge in [
+                (env.opp1_pos, "X", C["opp"],  "#7B0000"),
+                (env.opp2_pos, "Y", C["opp2"], "#4A0070")]:
             ox, oy = opos
             if 0 <= ox < W and 0 <= oy < H:
                 ody = H - 1 - oy
-                fc = C["opp"] if label_char == "X" else "#9C27B0"
                 ax.add_patch(FancyBboxPatch(
                     (ox + 0.12, ody + 0.12), 0.76, 0.76,
                     boxstyle="round,pad=0.04",
                     facecolor=fc, edgecolor=edge, linewidth=1.8, zorder=4))
-                ax.text(ox + 0.5, ody + 0.5, label_char, ha="center", va="center",
+                ax.text(ox + 0.5, ody + 0.5, lbl, ha="center", va="center",
                         fontsize=13, fontweight="bold", color="white", zorder=5)
 
     if env.level in (5, 6):
@@ -250,8 +322,8 @@ def draw_grid(ax, env, episode_count, total_reward, last_action, done):
         handles.append(mpatches.Patch(facecolor=C["teammate"], label="Mitspieler (T)"))
         handles.append(mpatches.Patch(facecolor=C["tm_pball"], label="Mitspieler+Ball (M)"))
     if env.level == 6:
-        handles.append(mpatches.Patch(facecolor=C["opp"],  label="Gegner 1 – Ball (X)"))
-        handles.append(mpatches.Patch(facecolor="#9C27B0", label="Gegner 2 – Press (Y)"))
+        handles.append(mpatches.Patch(facecolor=C["opp"],  label="Gegner 1 (X)"))
+        handles.append(mpatches.Patch(facecolor=C["opp2"], label="Gegner 2 (Y)"))
     ax.legend(handles=handles, loc="lower center", fontsize=7.5, ncol=3,
               framealpha=0.92, edgecolor=C["border"], facecolor=C["cell"])
 
@@ -301,7 +373,6 @@ class State:
         self.agent_ctx_idx = 0 if agent_type == "qtable" else 1
         self.plot_ctx_idx  = 0
 
-        # Live play
         self.env             = FootballEnv(level=level)
         self.agent, self.is_dqn = load_agent(level, agent_type)
         self.playing         = False
@@ -311,12 +382,12 @@ class State:
         self.episode_count   = 0
         self._reset_ep()
 
-        # GIF playback
         self.gif_frames = []
         self.gif_dur_ms = 333
         self.gif_idx    = 0
         self.gif_t      = 0.0
         self.gif_play   = True
+        self.gif_path   = None
 
     def _reset_ep(self):
         self.state        = self.env.reset()
@@ -358,34 +429,44 @@ class State:
         self._reset_ep()
 
     def reload_gif(self):
-        if self.mode == MODE_TRAIN:
-            ag  = "qtable" if self.agent_type == "qtable" else "dqn"
-            pat = os.path.join(config.ANIMATIONS_DIR,
-                               f"training_evolution_{ag}_level{self.level}_ep*.gif")
+        if self.mode == MODE_AGENT:
+            ag   = self.agent_type
+            path = _find_animation(self.level, ag)
         elif self.mode == MODE_COMPARE:
-            pat = os.path.join(config.ANIMATIONS_DIR,
-                               f"compare_level{self.level}_ep*.gif")
+            path = _find_compare_gif(self.level)
+            if not path:
+                # fall back to comparison PNG shown as static image
+                path = _find_plot(self.level, "comparison")
+                if path and path.endswith(".png"):
+                    self.gif_frames = [load_png(path)] if load_png(path) is not None else []
+                    self.gif_dur_ms = 5000
+                    self.gif_idx    = 0
+                    self.gif_t      = time.time()
+                    self.gif_play   = False
+                    self.gif_path   = path
+                    print(f"[Plot] Vergleich-PNG als Fallback: {os.path.basename(path)}")
+                    return
         else:
             self.gif_frames = []
             return
-        path = _find_file(pat)
+
         if path:
             self.gif_frames, self.gif_dur_ms = load_gif(path)
+            self.gif_path = path
             print(f"[GIF] {os.path.basename(path)}  ({len(self.gif_frames)} frames)")
         else:
             self.gif_frames, self.gif_dur_ms = [], 333
-            print(f"[!] Kein GIF: {pat}")
+            self.gif_path = None
+            ag = self.agent_type if self.mode == MODE_AGENT else "—"
+            print(f"[!] Kein GIF für Level {self.level} / {ag}")
         self.gif_idx  = 0
         self.gif_t    = time.time()
         self.gif_play = True
 
     def get_plot_image(self):
         lv, pt = self.level, self.plot_type
-        if   pt == "qtable":     pat = os.path.join(config.PLOTS_DIR, f"q_table_level{lv}_ep1000.png")
-        elif pt == "dqn":        pat = os.path.join(config.PLOTS_DIR, f"dqn_level{lv}_ep1000.png")
-        elif pt == "comparison": pat = os.path.join(config.PLOTS_DIR, f"comparison_level{lv}_ep1000.png")
-        else:                    pat = os.path.join(config.PLOTS_DIR, "summary.png")
-        return load_png(pat)
+        path = _find_plot(lv, pt)
+        return load_png(path)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -405,24 +486,38 @@ def main():
     fig.suptitle("RL Football Dashboard", fontsize=13, fontweight="bold",
                  color=C["text"], y=0.995)
 
-    # ── Sidebar: Level (RadioButtons, immer sichtbar) ─────────────────────
-    ax_lv = fig.add_axes([0.01, 0.44, 0.12, 0.49], facecolor=C["cell"])
+    # ── Sidebar: Level selector ───────────────────────────────────────────
+    ax_lv = fig.add_axes([0.01, 0.54, 0.12, 0.39], facecolor=C["cell"])
     ax_lv.set_title("Level", fontsize=9, pad=4, color=C["text"])
-    radio_lv = RadioButtons(ax_lv, ("Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"),
-                            active=s.level - 1, activecolor=C["agent"])
+    radio_lv = RadioButtons(
+        ax_lv,
+        ("Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"),
+        active=s.level - 1, activecolor=C["agent"])
     for lb in radio_lv.labels:
         lb.set_color(C["text"]); lb.set_fontsize(9)
 
-    # ── Sidebar: Kontext-Titel ─────────────────────────────────────────────
-    ax_ctx_lbl = fig.add_axes([0.01, 0.41, 0.12, 0.04])
+    # ── Sidebar: Level description ────────────────────────────────────────
+    ax_desc = fig.add_axes([0.01, 0.40, 0.12, 0.12], facecolor="#0D1117")
+    ax_desc.axis("off")
+    desc_text = ax_desc.text(
+        0.5, 0.5, LEVEL_DESC.get(s.level, ""),
+        ha="center", va="center", fontsize=7.0, color=C["text_dim"],
+        transform=ax_desc.transAxes, multialignment="center")
+
+    def _update_desc(level):
+        desc_text.set_text(LEVEL_DESC.get(level, ""))
+        fig.canvas.draw_idle()
+
+    # ── Sidebar: Kontext-Titel ────────────────────────────────────────────
+    ax_ctx_lbl = fig.add_axes([0.01, 0.36, 0.12, 0.04])
     ax_ctx_lbl.axis("off")
     ax_ctx_lbl.set_facecolor(C["bg"])
     ctx_title = ax_ctx_lbl.text(0.5, 0.5, "Agent", ha="center", va="center",
                                 fontsize=9, fontweight="bold", color=C["text"],
                                 transform=ax_ctx_lbl.transAxes)
 
-    # ── Sidebar: 4 Kontext-Buttons (Agent oder Plot-Typ) ──────────────────
-    CTX_Y = [0.31, 0.22, 0.13, 0.04]
+    # ── Sidebar: 4 Kontext-Buttons ────────────────────────────────────────
+    CTX_Y = [0.26, 0.17, 0.08, -0.01]
     ctx_axes = []
     ctx_btns = []
     for y in CTX_Y:
@@ -438,14 +533,8 @@ def main():
         title = CTX[mode]["title"]
         ctx_title.set_text(title)
         ax_ctx_lbl.set_visible(bool(title))
-
-        if mode in (MODE_LIVE, MODE_TRAIN):
-            sel = s.agent_ctx_idx
-        elif mode == MODE_PLOTS:
-            sel = s.plot_ctx_idx
-        else:
-            sel = -1
-
+        sel = s.agent_ctx_idx if mode in (MODE_LIVE, MODE_AGENT) else \
+              s.plot_ctx_idx  if mode == MODE_PLOTS else -1
         for i, (axt, btn) in enumerate(zip(ctx_axes, ctx_btns)):
             label = opts[i]
             if label:
@@ -459,10 +548,10 @@ def main():
 
     # ── Mode tabs ─────────────────────────────────────────────────────────
     TAB_DEFS = [
-        ("▶  Live Play",     MODE_LIVE),
-        ("⏩  Training Evo", MODE_TRAIN),
-        ("⚔  Vergleich",    MODE_COMPARE),
-        ("📊  Plots",        MODE_PLOTS),
+        ("Live Play",  MODE_LIVE),
+        ("Agent GIF",  MODE_AGENT),
+        ("Vergleich",  MODE_COMPARE),
+        ("Plots",      MODE_PLOTS),
     ]
     tab_axes = []
     tab_btns = []
@@ -477,7 +566,7 @@ def main():
         tab_btns.append(btn)
 
     def _update_tabs():
-        order = [MODE_LIVE, MODE_TRAIN, MODE_COMPARE, MODE_PLOTS]
+        order = [MODE_LIVE, MODE_AGENT, MODE_COMPARE, MODE_PLOTS]
         for i, m in enumerate(order):
             col = C["tab_on"] if m == s.mode else C["tab_off"]
             tab_axes[i].set_facecolor(col)
@@ -503,15 +592,14 @@ def main():
         b.label.set_fontsize(10)
         b.label.set_fontweight("bold")
 
-    # ax_spd is NOT in LIVE_AXES — it's managed separately (visible in Live + GIF modes)
     LIVE_AXES = [ax_grid, ax_stats, ax_bp, ax_bs, ax_br]
 
     # ── GIF / Image content ───────────────────────────────────────────────
     ax_img = fig.add_axes([0.16, 0.10, 0.82, 0.80], facecolor=C["bg"])
     ax_gp  = fig.add_axes([0.16, 0.02, 0.13, 0.06])
     ax_gr  = fig.add_axes([0.31, 0.02, 0.13, 0.06])
-    btn_gp = Button(ax_gp, "⏸ Pause",    color="#166534", hovercolor="#14532D")
-    btn_gr = Button(ax_gr, "↺ Neustart", color="#7F1D1D", hovercolor="#991B1B")
+    btn_gp = Button(ax_gp, "|| Pause",   color="#166534", hovercolor="#14532D")
+    btn_gr = Button(ax_gr, "<< Neustart", color="#7F1D1D", hovercolor="#991B1B")
     for b in (btn_gp, btn_gr):
         b.label.set_color(C["text"])
         b.label.set_fontsize(10)
@@ -521,7 +609,7 @@ def main():
 
     for ax in [ax_img] + GIF_CTRL:
         ax.set_visible(False)
-    ax_spd.set_visible(True)  # visible in Live mode by default
+    ax_spd.set_visible(True)
 
     # ── Content draw helpers ──────────────────────────────────────────────
     def _draw_live():
@@ -537,17 +625,28 @@ def main():
             ax_img.imshow(s.gif_frames[s.gif_idx])
             total = len(s.gif_frames)
             pct   = int((s.gif_idx + 1) / total * 100)
-            mode_label = "Training Evo." if s.mode == MODE_TRAIN else "Vergleich"
+            ag    = "Q-Table" if s.agent_type == "qtable" else "DQN"
+            if s.mode == MODE_AGENT:
+                mode_label = f"Agent GIF — {ag}"
+            else:
+                mode_label = "Vergleich"
+            fname = os.path.basename(s.gif_path) if s.gif_path else ""
             ax_img.set_title(
                 f"{mode_label}  —  Level {s.level}  |  "
-                f"Frame {s.gif_idx + 1}/{total}  ({pct}%)",
-                fontsize=9, color=C["text_dim"], pad=4)
+                f"Frame {s.gif_idx + 1}/{total}  ({pct}%)  |  {fname}",
+                fontsize=8.5, color=C["text_dim"], pad=4)
         else:
+            ag = "Q-Table" if s.agent_type == "qtable" else "DQN"
+            hint = (f"animation_{s.agent_type}_level{s.level}_ep*.gif"
+                    if s.mode == MODE_AGENT else
+                    f"compare_level{s.level}_ep*.gif")
             ax_img.text(0.5, 0.5,
-                        "Kein GIF gefunden\n"
-                        "(Skripte in src/visualization/ ausführen)",
+                        f"Kein GIF gefunden für Level {s.level} / {ag}\n\n"
+                        f"Erwarteter Dateiname: {hint}\n"
+                        f"Generieren mit: python src/visualization/animate_trained_model.py "
+                        f"--level {s.level}",
                         ha="center", va="center", transform=ax_img.transAxes,
-                        fontsize=12, color=C["text_dim"])
+                        fontsize=10, color=C["text_dim"])
 
     def _draw_plots():
         ax_img.cla()
@@ -584,14 +683,14 @@ def main():
             s.playing = False
             btn_play.label.set_text("Play")
 
-        elif mode in (MODE_TRAIN, MODE_COMPARE):
+        elif mode in (MODE_AGENT, MODE_COMPARE):
             for ax in LIVE_AXES: ax.set_visible(False)
             ax_spd.set_visible(True)
             ax_spd.set_xlabel("Abspielgeschw. (×)", fontsize=7.5, labelpad=1)
             ax_img.set_visible(True)
             for ax in GIF_CTRL: ax.set_visible(True)
             s.reload_gif()
-            btn_gp.label.set_text("⏸ Pause")
+            btn_gp.label.set_text("|| Pause")
 
         elif mode == MODE_PLOTS:
             for ax in LIVE_AXES: ax.set_visible(False)
@@ -603,7 +702,7 @@ def main():
 
     # ── Tab callbacks ─────────────────────────────────────────────────────
     tab_btns[0].on_clicked(lambda e: set_mode(MODE_LIVE))
-    tab_btns[1].on_clicked(lambda e: set_mode(MODE_TRAIN))
+    tab_btns[1].on_clicked(lambda e: set_mode(MODE_AGENT))
     tab_btns[2].on_clicked(lambda e: set_mode(MODE_COMPARE))
     tab_btns[3].on_clicked(lambda e: set_mode(MODE_PLOTS))
 
@@ -611,10 +710,11 @@ def main():
     def on_level(label):
         lv = int(label.split()[1])
         s.level = lv
+        _update_desc(lv)
         if s.mode == MODE_LIVE:
             s.reload_agent(level=lv)
             btn_play.label.set_text("Play")
-        elif s.mode in (MODE_TRAIN, MODE_COMPARE):
+        elif s.mode in (MODE_AGENT, MODE_COMPARE):
             s.reload_gif()
         refresh()
 
@@ -626,7 +726,7 @@ def main():
             opts = CTX[s.mode]["opts"]
             if not opts[i]:
                 return
-            if s.mode in (MODE_LIVE, MODE_TRAIN):
+            if s.mode in (MODE_LIVE, MODE_AGENT):
                 s.agent_ctx_idx = i
                 at = "qtable" if i == 0 else "dqn"
                 s.agent_type = at
@@ -682,13 +782,13 @@ def main():
     # ── GIF button callbacks ───────────────────────────────────────────────
     def on_gif_play(e):
         s.gif_play = not s.gif_play
-        btn_gp.label.set_text("⏸ Pause" if s.gif_play else "▶ Play")
+        btn_gp.label.set_text("|| Pause" if s.gif_play else "> Play")
 
     def on_gif_reset(e):
         s.gif_idx  = 0
         s.gif_t    = time.time()
         s.gif_play = True
-        btn_gp.label.set_text("⏸ Pause")
+        btn_gp.label.set_text("|| Pause")
         refresh()
 
     btn_gp.on_clicked(on_gif_play)
@@ -707,7 +807,7 @@ def main():
                     _draw_live()
                     fig.canvas.draw_idle()
 
-        elif s.mode in (MODE_TRAIN, MODE_COMPARE):
+        elif s.mode in (MODE_AGENT, MODE_COMPARE):
             if s.gif_play and s.gif_frames:
                 now = time.time()
                 delay = (s.gif_dur_ms / 1000) / max(s.speed, 0.25)
