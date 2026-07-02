@@ -88,18 +88,20 @@ def _find_file(pattern):
     return max(files, key=_key)
 
 
-_EXCLUDED_DIRS = {"old", "opt_iter6_2906"}
+_EXCLUDED_DIRS = {"old", "opt_iter6_2906", "a_dev_4_2206_1"}
 
-def _find_across_runs(filename_pattern):
+def _find_across_runs(filename_pattern, ext=None):
     """Search for a file matching filename_pattern across all results subdirs.
-    Excludes legacy (results/old/) and discarded experiment (opt_iter6_2906) dirs.
-    Returns the path with the highest episode count, preferring newer run dirs."""
+    Excludes legacy and discarded experiment dirs.
+    Returns the path with the highest episode count, preferring newer run dirs.
+    If ext is given (e.g. '.png', '.gif'), only files with that extension are returned."""
     base = config.RESULTS_BASE
     candidates = []
     for root, dirs, files in os.walk(base):
-        # Prune excluded directories so os.walk won't descend into them
         dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
         for f in files:
+            if ext and not f.endswith(ext):
+                continue
             full = os.path.join(root, f)
             if re.search(filename_pattern + r"[^/]*$", f) and "_snapshots" not in f:
                 m = re.search(r"_ep(\d+)", f)
@@ -126,7 +128,7 @@ def _find_training_evo(level, agent):
 def _find_compare_gif(level):
     """Find comparison GIF for given level across all run dirs."""
     pattern = rf"compare_level{level}_ep\d+"
-    return _find_across_runs(pattern)
+    return _find_across_runs(pattern, ext=".gif")
 
 
 def _find_plot(level, plot_type, prefer_ep=3000):
@@ -137,7 +139,7 @@ def _find_plot(level, plot_type, prefer_ep=3000):
 
     prefix = {"qtable": "q_table", "dqn": "dqn", "comparison": "comparison"}.get(plot_type, plot_type)
     pattern = rf"{prefix}_level{level}_ep\d+"
-    path = _find_across_runs(pattern)
+    path = _find_across_runs(pattern, ext=".png")
     return path
 
 
