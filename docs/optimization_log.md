@@ -47,6 +47,7 @@ Claude analysiert nach jeder Iteration die Trainingskurven und Metriken, entsche
 | 5 | Finale Bestätigung: MEMORY_SIZE→15000, alle anderen wie Iter2 | 2026-06-29 |
 | 6 | L4 Sparse-Reward-Experiment: OBSTACLE_HEIGHT 4→2 (danach revert) | 2026-06-29 |
 | 7 | Level 6 Erstlauf: Q-Table + DQN, 1000 + 3000 Episoden | 2026-06-29 |
+| 8 | L1 Reward-Exploit-Fix: `REWARD_GOAL_ROW_ALIGN` Guard + L1 Neutraining + Seed | 2026-07-02 |
 
 ---
 
@@ -437,14 +438,46 @@ Auf L1–L5 gilt: "Beide Agenten vergleichbar, Q-Table stabiler." L6 ergänzt: "
 
 ---
 
+## Iteration 8 — L1 Reward-Exploit-Fix und Reproduzierbarkeit
+
+**Datum:** 2026-07-02  
+**Run-Verzeichnis:** `results/a_dev_7_0207_1/`  
+**Anlass:** Partner-Review identifizierte per Greedy-Rollout (ε=0) einen kritischen Bug: Beide Agenten auf Level 1 schießen kein einziges Tor — sie pendeln stattdessen auf der Torreihe (y=3) mit positivem Reward. Ursache: `REWARD_GOAL_ROW_ALIGN (+1)` feuerte jeden Schritt ohne Guard, solange Agent den Ball auf der Torreihe hält.
+
+**Änderungen:**
+
+| # | Datei | Änderung | Begründung |
+|---|---|---|---|
+| 1 | `src/environment.py` | `goal_row_rewarded`-Flag eingeführt; `REWARD_GOAL_ROW_ALIGN` feuert jetzt nur einmal pro Episode (analog zu `ball_pickup_rewarded`) | Verhindert Pendel-Exploit: Agent lernt jetzt das Tor zu suchen statt auf Torreihe zu bleiben |
+| 2 | `src/train_q_table.py` | `set_seed(42)` am Anfang von `train()` | Reproduzierbarkeit: Jedes Neutraining liefert dasselbe Modell; Teilen von Modellen zwischen Partnern nicht mehr notwendig |
+| 3 | `src/train_dqn.py` | `set_seed(42)` am Anfang von `train()` | Wie oben |
+
+### Ergebnisse
+
+| Level | Agent | ep1000 Goal% | ep3000 Goal% | Vergleich zu Iter5 |
+|---|---|---|---|---|
+| L1 | Q-Table | 100.0% | 100.0% | Exploit gebrochen: 100% statt 94% (ep3000) |
+| L1 | DQN | 23.0% | 96.6% | Exploit gebrochen: echte Tore, stabiler Anstieg |
+
+### Analyse
+
+Der Bug hatte zwei Effekte:
+1. **Falsches Verhalten sichtbar**: Agenten trainierten scheinbar erfolgreich (positive Rewards), schossen aber nie. "Gut trainiert" und "richtiges Verhalten" sind ohne manuelle Policy-Inspektion nicht immer gleich.
+2. **Strukturell lehrreich für die Präsentation**: Reward Engineering ist schwierig — ein fehlender Guard kann dazu führen, dass ein Agent genau das *Gegenteil* des gewünschten Verhaltens lernt, während die Trainingsmetriken positiv aussehen.
+
+**Ergebnis nach Fix:**  
+Q-Table 100% Torquote ab Ep1000, DQN 96.6% bei Ep3000. Beide Agenten spielen jetzt valide L1-Strategien.
+
+---
+
 ## Gesamtübersicht — Baseline vs. Finale Konfiguration (Iteration 5)
 
 ### Beste erreichte Ergebnisse (Iteration 2 = beste DQN, Iteration 5 = stabiler Abschluss)
 
 | Level | Agent | Baseline Goal% (ep3000) | Finale Goal% (ep3000) | Verbesserung |
 |---|---|---|---|---|
-| L1 | Q-Table | 94% | 94% | = |
-| L1 | DQN | 93% | 91% | ≈ |
+| L1 | Q-Table | 94% | **100%** | **+6%** (Iter8: Exploit-Fix) |
+| L1 | DQN | 93% | **96.6%** | **+4%** (Iter8: Exploit-Fix) |
 | L2 | Q-Table | 100% | 100% | = |
 | L2 | DQN | 100% | 100% | = |
 | L3 | Q-Table | 95% | 92% | ≈ |
@@ -466,4 +499,6 @@ Auf L1–L5 gilt: "Beide Agenten vergleichbar, Q-Table stabiler." L6 ergänzt: "
 
 4. **L4 DQN als strukturelles Problem**: Multi-Step Obstacle-Navigation ist für Standard-DQN mit 3000 Episoden zu schwer. Curriculum Learning oder gezieltes Reward-Shaping (Corridor-Reward) nötig.
 
-5. **Q-Table robust, DQN instabil**: Q-Table konvergiert auf L1–L5 stabil und reproduzierbar. DQN zeigt Varianz zwischen Runs (kein fixer Seed) und gelegentliche Instabilität nach ε-Minimum — charakteristisch für den Algorithmus, wichtig für die Präsentation.
+5. **Q-Table robust, DQN instabil**: Q-Table konvergiert auf L1–L5 stabil und reproduzierbar. DQN zeigt Varianz zwischen Runs und gelegentliche Instabilität nach ε-Minimum — charakteristisch für den Algorithmus, wichtig für die Präsentation. Ab Iter8 ist set_seed(42) aktiv, DQN-Runs sind jetzt reproduzierbar.
+
+6. **Reward-Exploit L1 (Iter8)**: `REWARD_GOAL_ROW_ALIGN` ohne Einmal-Guard erlaubte Pendeln auf der Torreihe ohne Torerfolg bei positivem Reward. Lehre: Reward-Farming ist subtil — Trainingsmetriken können positiv sein während der Agent das falsche Verhalten lernt. Policy-Inspektion (Greedy-Rollout) ist Pflicht.

@@ -10,9 +10,11 @@ import numpy as np
 import config
 from src.environment import FootballEnv
 from src.q_table_agent import QTableAgent
+from src.utils import set_seed
 
 
 def train(n_snapshots=10):
+    set_seed(42)
     env = FootballEnv(level=config.LEVEL)
     agent = QTableAgent(n_actions=env.n_actions)
 

@@ -12,3 +12,15 @@ results/old/models/*_snapshots.pkl
 results/old/models/*_snapshots.pt
 results/*/models/*_snapshots.pkl
 results/*/models/*_snapshots.pt
+
+# macOS Finder duplicate files (e.g. "file 2.pkl" created by Finder copy)
+* 2.pkl
+* 2.pt
+* 2.json
+* 2.png
+* 2.py
+
+# Intermediate/duplicate training runs on this branch (L1 retrain artifact)
+results/a_dev_7_0207_2/
+results/a_dev_7_0207_3/
+results/a_dev_7_0207_4/
