@@ -48,6 +48,7 @@ Claude analysiert nach jeder Iteration die Trainingskurven und Metriken, entsche
 | 6 | L4 Sparse-Reward-Experiment: OBSTACLE_HEIGHT 4→2 (danach revert) | 2026-06-29 |
 | 7 | Level 6 Erstlauf: Q-Table + DQN, 1000 + 3000 Episoden | 2026-06-29 |
 | 8 | L1 Reward-Exploit-Fix: `REWARD_GOAL_ROW_ALIGN` Guard + L1 Neutraining + Seed | 2026-07-02 |
+| 9 | Greedy-Eval aller Level + Ergebniskonsolidierung + Dashboard-Fixes | 2026-07-04 |
 
 ---
 
@@ -467,6 +468,44 @@ Der Bug hatte zwei Effekte:
 
 **Ergebnis nach Fix:**  
 Q-Table 100% Torquote ab Ep1000, DQN 96.6% bei Ep3000. Beide Agenten spielen jetzt valide L1-Strategien.
+
+---
+
+## Iteration 9 — Greedy-Eval, Konsolidierung und Dashboard-Fixes
+
+**Datum:** 2026-07-04  
+**Run-Verzeichnis:** `results/final_0207/` (Konsolidierung aus a_dev_7_0207_1, opt_iter5_2906, opt_iter7_2906)
+
+### Greedy-Evaluation (ε=0, 300 Episoden)
+
+Alle finalen Modelle wurden ohne Exploration (ε=0) evaluiert, um echte Policy-Qualität ohne Trainings-Rauschen zu messen:
+
+| Agent | L1 | L2 | L3 | L4 | L5 | L6 |
+|---|---|---|---|---|---|---|
+| Q-Table | **100%** | **100%** | **100%** | **100%** | **100%** | **100%** |
+| DQN | **100%** | **100%** | **100%** | **0%** | **100%** | **100%** |
+
+**Befund:** Alle Trainings-Instabilitäten (DQN L1 späte Konvergenz, DQN L6 Q-Drift) sind reines Training-Rauschen — die greedy Policies aller Modelle außer DQN L4 sind vollständig konvergiert. DQN L4 = 0% ist das einzige echte Versagen und ist dokumentiert gewollt (Sparse-Reward-Demonstration, vgl. Iter6).
+
+**Kein Exploit in den finalen Modellen**: Q-Table L6 zeigte im Training `R@no_goal=+5.6` — das sind Shaping-Rewards (+1 näher, +15 Teammate-Pickup) die während ε-Exploration anfallen. Greedy zeigt keinen einzigen Fall.
+
+### Ergebniskonsolidierung
+
+Alle finalen Dateien (L1–L6, beide Agenten) wurden in `results/final_0207/` zusammengeführt:
+- `models/` — 12 Modelle (q_table + dqn, Level 1–6, ep3000)
+- `logs/` — 12 Trainingslogs
+- `plots/` — 18 PNGs (Q-Table / DQN / Vergleich × L1–L6)
+- `animations/` — 24 GIFs (Agent-Rollout + Training-Evolution × Q-Table + DQN × L1–L6) + 6 Compare-GIFs
+
+Das Dashboard findet `final_0207` wegen neuester Datei-mtime automatisch zuerst — kein Suchen mehr in Zwischenordnern.
+
+### Dashboard-Fixes
+
+| # | Problem | Fix |
+|---|---|---|
+| 1 | Plots-Tab zeigte GIFs statt PNGs | `_find_across_runs()` um `ext`-Parameter ergänzt; `_find_plot()` übergibt `ext=".png"` |
+| 2 | Vergleich-Tab inkonsistent (L1/L3: alter side-by-side GIF, L2/4/5/6: Training-PNG) | `a_dev_4_2206_1` zu `_EXCLUDED_DIRS` hinzugefügt; Compare-GIFs für alle 6 Level neu generiert |
+| 3 | Compare-GIFs nutzten Pre-Bugfix-Modelle (ep5000 L1) | Neugenierung aus `final_0207`-Modellen → `compare_level{1-6}_ep3000.gif` |
 
 ---
 

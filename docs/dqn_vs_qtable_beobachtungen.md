@@ -306,6 +306,56 @@ vollständig stabil.
 
 ---
 
+---
+
+## Tiefenanalyse — DQN Level 1 vs. Level 2: Warum das einfachere Level schwerer ist (04.07.2026)
+
+### Beobachtung
+
+Im finalen Training (ep3000, Seed=42) zeigen die Trainingskurven ein kontraintuitives Muster:
+
+- **DQN L1**: Plateau bei ~20–35% Goal-Rate bis Ep2400, dann abrupter Sprung auf 98–99%
+- **DQN L2**: Konvergiert ab Ep200 stabil auf 99–100%, fast identisch mit Q-Table
+- **Q-Table L1 + L2**: Beide konvergieren ab Ep200 stabil auf 100% — kein Unterschied
+
+Obwohl Level 1 (nur Ball holen + in Zone schießen) strukturell einfacher ist als Level 2 (Dribbling vs. Pass-Entscheidung), braucht DQN auf L1 ca. 12× länger.
+
+### Ursache: Die Shoot-Penalty-Falle
+
+Level 1 hat zwei harte Strafen: `-5` für Schuss ohne Ball, `-5` für Schuss außerhalb der Schusszone. In den ersten ~200 Episoden feuert DQN zufällige Aktionen — `shoot` trifft dabei fast immer eine der beiden Bedingungen (kein Ball dabei oder falsche Position). Das Netz lernt schnell: *"Aktion `shoot` ist fast immer schlecht."* Die Q-Werte für `shoot` werden **global negativ** — über alle Zustände hinweg, weil die Netzgewichte geteilt werden.
+
+Das ist ein **lokales Optimum**: Der Agent erkundet das Feld, sammelt kleine `+1` Shaping-Rewards (näher am Ziel), schießt aber nie systematisch. Die Trainingsmetrik sieht dabei gar nicht schlecht aus (20–35% Torrate durch ε-Exploration-Zufallstreffer), was das Problem verschleiert.
+
+### Warum der Sprung bei Ep~2500 kommt
+
+Kein Zufall — eine **positive Feedback-Schleife**:
+
+1. ε-Exploration (ε=0.05 ab Ep~1500) erzeugt gelegentlich die seltene Kombination: Ball aufnehmen → Schusszone erreichen → `shoot` → +30 Reward
+2. Diese Erfolgstransitionen landen im Replay Buffer und werden wiederholt gesampelt
+3. Q-Wert für `shoot in Zone mit Ball` steigt langsam über null — aber nur für diese spezifische Kombination
+4. Ab einem Schwellwert: Mehr Tore → mehr Erfolgstransitionen im Buffer → noch bessere Q-Werte → noch mehr Tore
+5. Daher der abrupte Sprung: keine graduelle Verbesserung, sondern eine Phasenschwelle
+
+### Warum L2 für DQN strukturell einfacher ist
+
+In Level 2 gibt der Pass-Schuss immer `+2` wenn der Ball sich dem Tor nähert — **auch aus einer schlechten Position**. Es gibt keinen binären Penalty-Trap wie in L1. Fast jede `shoot`-Aktion produziert irgendein positives Signal, solange der Ball sich vorwärts bewegt. Das verhindert, dass `shoot` global negativ wird — DQN findet ab Ep200 eine nützliche Policy.
+
+### Seed-Effekt: Ist DQN L2's frühe Konvergenz Glück?
+
+Teilweise. Seed=42 bestimmt die initialen Netzgewichte — die für L2 zufällig günstig waren (87% Torrate bereits bei Ep1!). Mit einem anderen Seed könnte DQN L2 auch bis Ep1000 gebraucht haben. Die Reward-Struktur von L2 ist jedoch **fundamentell DQN-freundlicher**: kein Penalty-Trap, partielles Kredit-Signal für fast alle `shoot`-Aktionen. L1 wäre mit jedem Seed langsamer als L2.
+
+### Warum Q-Table dieses Problem nicht hat
+
+1. **Tabellarische Explorationsgarantie**: Jede `(state, action)`-Kombination bekommt mit ε-greedy unabhängige Updates. Es gibt keine Gewichtsinterferenz — `Q(schusszone, shoot)` und `Q(mitte, shoot)` sind völlig separate Einträge.
+2. **Kein negativer Transfer**: DQN lernt "shoot ist schlecht in Zustand A" und beeinflusst dadurch über geteilte Gewichte auch "shoot in Zustand B". Q-Table hat dieses Problem strukturell nicht.
+3. **L1 State-Space ist winzig**: 7.200 Zustände. ε-greedy deckt den relevanten Teil in wenigen hundert Episoden ab. Q-Table konvergiert bei Ep200.
+
+### Lehraussage für die Präsentation
+
+DQN L1 ist ein Paradebeispiel für das **Reward-Shaping-Dilemma**: Penalties, die schlechtes Verhalten vermeiden sollen, können das Netz in ein lokales Optimum treiben, in dem es gar nichts tut. Die Trainingsmetrik sieht moderat aus (~30% Torrate), obwohl keine echte Policy gelernt wird. Q-Table umgeht das durch unabhängige Tabelleneinträge. Das ist kein Bug — es ist eine fundamentale Eigenschaft von Funktionsapproximation unter spärlichen Belohnungen.
+
+---
+
 ## Abgeschlossene Optimierungsaufgaben
 
 - [x] DQN Level 1: Reward Shaping + 2D Schusszone implementiert (18.06.2026)
