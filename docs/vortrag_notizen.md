@@ -93,20 +93,26 @@ Drei repräsentative Probleme mit konkreten Plot-Referenzen.
 ### Problem 1 — Reward Exploit: Agent schießt nie, obwohl er "lernt"
 
 **Betroffenes Level:** L1 (vor Iter8-Fix)  
-**Plot (Problem):** `results/old/plots/dqn_level1_ep5000.png` oder `results/old/plots/comparison_level1_ep5000.png`  
+**Kein Plot zeigt den Exploit** — das ist die eigentliche Pointe.  
 **Plot (nach Fix):** `results/final_0207/plots/comparison_level1_ep3000.png`
 
-**Was der alte Plot zeigt:**  
-Beide Agenten trainieren mit positivem Durchschnitts-Reward, die Kurve sieht stabil aus — und trotzdem erzielen sie kaum Tore (unter 50%). Bei genauerer Inspektion (Greedy-Rollout) wurde klar: Die Agenten pendeln auf der Torreihe (y=3) und sammeln `REWARD_GOAL_ROW_ALIGN = +1` pro Schritt, ohne jemals zu schießen. Positiver Reward, falsches Verhalten.
+**Warum man es im Plot nicht sieht:**  
+Die Trainingsmetriken sahen während des Exploits völlig akzeptabel aus — moderate positive Rewards, keine offensichtlichen Warnzeichen in der Kurve. Der Agent sammelte `REWARD_GOAL_ROW_ALIGN = +1` pro Schritt auf y=3 und `+5` beim Ball-Aufnehmen, was zusammen stabil positive Rewards erzeugte. Kein Ausreißer, kein Absturz, kein Alarm.
+
+**Wie es entdeckt wurde:**  
+Ausschließlich durch **Greedy-Rollout** (ε=0, Agent spielt ohne Exploration): Agent holt Ball, läuft auf Torreihe y=3 — und bleibt dort bis MAX_STEPS. Kein einziges Tor in 300 Episoden. Erst die Inspektion der eigentlichen Policy hat das Verhalten sichtbar gemacht.
 
 **Ursache:**  
-`REWARD_GOAL_ROW_ALIGN` feuerte jeden Schritt ohne Guard, solange der Agent mit Ball auf y=3 stand. Endlos-Loop mit +1/Schritt ist lukrativer als ein einzelner Schuss (+30, aber dann Episode vorbei).
+`REWARD_GOAL_ROW_ALIGN` feuerte jeden Schritt ohne Guard, solange der Agent mit Ball auf y=3 stand. Auf der Torreihe gilt: `+1` (goal_row_align) `−1` (step_penalty) = **netto 0 pro Schritt**. Das ist besser als die Torreihe zu verlassen (`−1` pro Schritt). Für den Agenten ist es strikt rational, dort zu bleiben. Der Schuss (`+30`) endet die Episode — das ist für den Agenten unattraktiv verglichen mit "ewig +0 pro Schritt sammeln".
 
 **Fix:**  
 `goal_row_rewarded`-Flag → Reward feuert nur einmal pro Episode (analog zu `ball_pickup_rewarded`). Eine Zeile Code.
 
+**Empfehlung für den Vortrag:**  
+Nicht versuchen, den Exploit im Plot zu zeigen — er ist dort nicht sichtbar. Stattdessen: **Konzept erklären** ("wir haben 3000 Episoden trainiert, Metriken sahen gut aus, Agent hat nie ein Tor geschossen — erst der Greedy-Rollout hat es aufgedeckt") und dann das `before/after` am Code zeigen: die eine Zeile ohne Guard vs. mit Guard.
+
 **Lehraussage:**  
-Reward Engineering ist schwierig. Eine positive Trainingskurve bedeutet nicht, dass der Agent das richtige Verhalten lernt. **Policy-Inspektion (Greedy-Rollout) ist Pflicht** — Trainingsmetriken allein sind kein Qualitätsbeweis.
+Reward Engineering ist schwierig. Eine positive Trainingskurve bedeutet nicht, dass der Agent das richtige Verhalten lernt. **Policy-Inspektion (Greedy-Rollout) ist Pflicht** — Trainingsmetriken allein sind kein Qualitätsbeweis. Das ist die stärkste Aussage: das Problem war unsichtbar bis zur direkten Verhaltensbeobachtung.
 
 ---
 
